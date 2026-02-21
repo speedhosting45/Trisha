@@ -104,6 +104,13 @@ async def handle_create(event):
         from utils.texts import CREATE_MESSAGE
         from utils.buttons import get_create_buttons
         
+        # For callback queries, we need to get the message first
+        if hasattr(event, 'message') and event.message:
+            message = event.message
+        else:
+            # For callback queries without direct message attribute
+            message = await event.get_message()
+        
         await event.edit(
             CREATE_MESSAGE,
             buttons=get_create_buttons(),
@@ -118,6 +125,12 @@ async def handle_create_p2p(event):
     Handle P2P deal selection
     """
     try:
+        # Get the message object first (fix for callback queries)
+        if hasattr(event, 'message') and event.message:
+            message = event.message
+        else:
+            message = await event.get_message()
+        
         # Get user mention
         user = await event.get_sender()
         mention = user.first_name
@@ -159,7 +172,7 @@ async def handle_create_p2p(event):
             buttons = get_p2p_created_buttons(result["invite_url"])
             
             # Create message
-            message = P2P_CREATED_MESSAGE.format(
+            message_text = P2P_CREATED_MESSAGE.format(
                 GROUP_NUMBER=group_number,
                 GROUP_INVITE_LINK=result["invite_url"],
                 GROUP_NAME=group_name,
@@ -169,8 +182,8 @@ async def handle_create_p2p(event):
             # Send final message with custom emojis
             await edit_message_with_custom_emojis(
                 event.client,
-                event.message,
-                message,
+                message,  # Use the message object we got at the beginning
+                message_text,
                 parse_mode='html',
                 buttons=buttons
             )
@@ -199,6 +212,12 @@ async def handle_create_other(event):
     Handle OTC deal selection
     """
     try:
+        # Get the message object first (fix for callback queries)
+        if hasattr(event, 'message') and event.message:
+            message = event.message
+        else:
+            message = await event.get_message()
+        
         # Get user mention
         user = await event.get_sender()
         mention = user.first_name
@@ -240,7 +259,7 @@ async def handle_create_other(event):
             buttons = get_otc_created_buttons(result["invite_url"])
             
             # Create message
-            message = OTHER_CREATED_MESSAGE.format(
+            message_text = OTHER_CREATED_MESSAGE.format(
                 GROUP_NUMBER=group_number,
                 GROUP_INVITE_LINK=result["invite_url"],
                 GROUP_NAME=group_name,
@@ -250,8 +269,8 @@ async def handle_create_other(event):
             # Send final message with custom emojis
             await edit_message_with_custom_emojis(
                 event.client,
-                event.message,
-                message,
+                message,  # Use the message object we got at the beginning
+                message_text,
                 parse_mode='html',
                 buttons=buttons
             )
@@ -275,6 +294,7 @@ async def handle_create_other(event):
             buttons=[Button.inline("🔄 Try Again", b"create")]
         )
 
+# Rest of your code remains exactly the same...
 async def create_escrow_group(group_name, bot_username, group_type, bot_client, creator_user_id):
     """
     Create a supergroup
