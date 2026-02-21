@@ -130,17 +130,17 @@ Verification failed for <b>{chain}</b> network.
 <blockquote>Please ensure the address matches the specific blockchain network selected for this transaction.</blockquote>
 """
 P2P_CREATED_MESSAGE = """
-𝘗2𝘗 𝘌𝘴𝘤𝘳𝘰𝘸 𝘌𝘴𝘵𝘢𝘣𝘭𝘪𝘴𝘩𝘦𝘥 emoji_1= (ID: 6035339257529242355)
+𝘗2𝘗 𝘌𝘴𝘤𝘳𝘰𝘸 𝘌𝘴𝘵𝘢𝘣𝘭𝘪𝘴𝘩𝘦𝘥 
 
-<blockquote>Secure transaction group created emoji_2= (ID: 5258332798409783582)</blockquote>
+<blockquote>Secure transaction group created </blockquote>
 
-<b>Group:</b> {GROUP_NAME} emoji_3= (ID: 5339300332168036242)
-<b>Type:</b> P2P Transaction emoji_4= (ID: 5246734896356936944)
-<b>Status:</b> Ready for configuration emoji_5= (ID: 5240428351063081133)
+<b>Group:</b> {GROUP_NAME} 
+<b>Type:</b> P2P Transaction 
+<b>Status:</b> Ready for configuration 
 
 <code>{GROUP_INVITE_LINK}</code>
 
-Proceed to the group to configure participants and terms emoji_6= (ID: 5260567255145539253) <a href="https://files.catbox.moe/ieiejo.png">.</a>
+Proceed to the group to configure participants and terms <a href="https://files.catbox.moe/ieiejo.png">.</a>
 """
 
 OTHER_CREATED_MESSAGE = """
