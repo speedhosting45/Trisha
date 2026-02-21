@@ -745,6 +745,9 @@ class EscrowBot:
                 await event.answer("❌ Group not found", alert=True)
                 return
             
+            # Get group data - FIXED: Define group_data
+            group_data = groups.get(group_id, {})
+            
             # Check if this user is the bot
             bot_id = (await self.client.get_me()).id
             if sender.id == bot_id:
@@ -763,7 +766,7 @@ class EscrowBot:
             except:
                 pass
             
-            # Check if this user is one of the 2 eligible users
+            # Check if this user is one of the 2 eligible users - FIXED: Now group_data is defined
             eligible_user_ids = group_data.get("members", [])
             if sender.id not in eligible_user_ids:
                 await event.answer("❌ You are not an eligible participant for this session", alert=True)
