@@ -107,6 +107,46 @@ async def edit_message_with_custom_emojis(client, message, text, parse_mode='htm
         formatting_entities=entities if entities else None
     )
 
+async def answer_or_edit(event, text, parse_mode='html', buttons=None):
+    """
+    Helper function to handle both callback queries and message events
+    """
+    try:
+        if hasattr(event, 'message') and event.message:
+            # We have a message to edit
+            await edit_message_with_custom_emojis(
+                event.client,
+                event.message,
+                text,
+                parse_mode=parse_mode,
+                buttons=buttons
+            )
+        else:
+            # No message to edit, send a new one or answer callback
+            if hasattr(event, 'answer'):
+                await event.answer(text, alert=False)
+            else:
+                await send_message_with_custom_emojis(
+                    event.client,
+                    event.chat_id,
+                    text,
+                    parse_mode=parse_mode,
+                    buttons=buttons
+                )
+    except Exception as e:
+        print(f"[ERROR] answer_or_edit: {e}")
+        # Fallback to sending a new message
+        try:
+            await send_message_with_custom_emojis(
+                event.client,
+                event.chat_id if hasattr(event, 'chat_id') else event.sender_id,
+                text,
+                parse_mode=parse_mode,
+                buttons=buttons
+            )
+        except Exception as e2:
+            print(f"[ERROR] Fallback failed: {e2}")
+
 # Define get_next_number locally
 def get_next_number(group_type="p2p"):
     """Get next sequential group number"""
@@ -139,16 +179,18 @@ async def handle_create(event):
         from utils.texts import CREATE_MESSAGE
         from utils.buttons import get_create_buttons
         
-        await edit_message_with_custom_emojis(
-            event.client,
-            event.message,
+        await answer_or_edit(
+            event,
             CREATE_MESSAGE,
             parse_mode='html',
             buttons=get_create_buttons()
         )
     except Exception as e:
         print(f"[ERROR] create handler: {e}")
-        await event.answer("✅ Create escrow menu", alert=False)
+        try:
+            await event.answer("✅ Create escrow menu", alert=False)
+        except:
+            pass
 
 async def handle_create_p2p(event):
     """
@@ -179,9 +221,8 @@ async def handle_create_p2p(event):
         
         # Display animation
         for msg in animation_messages:
-            await edit_message_with_custom_emojis(
-                event.client,
-                event.message,
+            await answer_or_edit(
+                event,
                 msg,
                 parse_mode='html'
             )
@@ -197,7 +238,7 @@ async def handle_create_p2p(event):
             # Get buttons
             buttons = get_p2p_created_buttons(result["invite_url"])
             
-            # Format message with group details (this keeps the emoji_1= (ID: ...) patterns intact)
+            # Format message with group details
             message = P2P_CREATED_MESSAGE.format(
                 GROUP_NUMBER=group_number,
                 GROUP_INVITE_LINK=result["invite_url"],
@@ -205,9 +246,8 @@ async def handle_create_p2p(event):
             )
             
             # Send final message with custom emojis
-            await edit_message_with_custom_emojis(
-                event.client,
-                event.message,
+            await answer_or_edit(
+                event,
                 message,
                 parse_mode='html',
                 buttons=buttons
@@ -216,9 +256,8 @@ async def handle_create_p2p(event):
             print(f"[SUCCESS] P2P Escrow created: {group_name}")
             
         else:
-            await edit_message_with_custom_emojis(
-                event.client,
-                event.message,
+            await answer_or_edit(
+                event,
                 "𝘌𝘴𝘤𝘳𝘰𝘸 𝘊𝘳𝘦𝘢𝘵𝘪𝘰𝘯 𝘍𝘢𝘪𝘭𝘦𝘥\n\n<blockquote>Please try again later</blockquote>",
                 parse_mode='html',
                 buttons=[Button.inline("🔄 Try Again", b"create")]
@@ -228,9 +267,8 @@ async def handle_create_p2p(event):
         print(f"[ERROR] P2P handler: {e}")
         import traceback
         traceback.print_exc()
-        await edit_message_with_custom_emojis(
-            event.client,
-            event.message,
+        await answer_or_edit(
+            event,
             "𝘌𝘳𝘳𝘰𝘳 𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘌𝘴𝘤𝘳𝘰𝘸\n\n<blockquote>Technical issue detected</blockquote>",
             parse_mode='html',
             buttons=[Button.inline("🔄 Try Again", b"create")]
@@ -265,9 +303,8 @@ async def handle_create_other(event):
         
         # Display animation
         for msg in animation_messages:
-            await edit_message_with_custom_emojis(
-                event.client,
-                event.message,
+            await answer_or_edit(
+                event,
                 msg,
                 parse_mode='html'
             )
@@ -291,9 +328,8 @@ async def handle_create_other(event):
             )
             
             # Send final message with custom emojis
-            await edit_message_with_custom_emojis(
-                event.client,
-                event.message,
+            await answer_or_edit(
+                event,
                 message,
                 parse_mode='html',
                 buttons=buttons
@@ -302,9 +338,8 @@ async def handle_create_other(event):
             print(f"[SUCCESS] OTC Escrow created: {group_name}")
             
         else:
-            await edit_message_with_custom_emojis(
-                event.client,
-                event.message,
+            await answer_or_edit(
+                event,
                 "𝘌𝘴𝘤𝘳𝘰𝘸 𝘊𝘳𝘦𝘢𝘵𝘪𝘰𝘯 𝘍𝘢𝘪𝘭𝘦𝘥\n\n<blockquote>Please try again later</blockquote>",
                 parse_mode='html',
                 buttons=[Button.inline("🔄 Try Again", b"create")]
@@ -314,9 +349,8 @@ async def handle_create_other(event):
         print(f"[ERROR] OTC handler: {e}")
         import traceback
         traceback.print_exc()
-        await edit_message_with_custom_emojis(
-            event.client,
-            event.message,
+        await answer_or_edit(
+            event,
             "𝘌𝘳𝘳𝘰𝘳 𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘌𝘴𝘤𝘳𝘰𝘸\n\n<blockquote>Technical issue detected</blockquote>",
             parse_mode='html',
             buttons=[Button.inline("🔄 Try Again", b"create")]
