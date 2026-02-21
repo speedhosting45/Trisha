@@ -7,6 +7,7 @@ import logging
 import sys
 from telethon import TelegramClient, events
 from telethon.tl import functions, types
+from telethon.tl.types import ChannelParticipantCreator, ChannelParticipantAdmin, ChannelParticipant
 import json
 import os
 import time
@@ -388,7 +389,7 @@ class EscrowBot:
         # Setup address handlers
         setup_address_handlers(self.client)
         
-        # Handle new users joining
+        # Handle new users joining - FIXED VERSION
         @self.client.on(events.ChatAction)
         async def handle_chat_action(event):
             await self.handle_new_member(event)
@@ -420,54 +421,57 @@ class EscrowBot:
                 pass
     
     async def handle_new_member(self, event):
-        """Handle new members joining the group"""
+        """Handle new members joining the group - FIXED VERSION"""
         try:
-            # Check if this is a user joining event
-            if event.user_joined or event.user_added:
+            # Check if this is a user joining event safely
+            if hasattr(event, 'user_joined') and event.user_joined:
                 # Get the chat
                 chat = await event.get_chat()
                 
-                # Get the new member(s)
-                users = event.action_message.action.users
-                
-                for user_id in users:
-                    try:
-                        # Get user info
-                        user = await event.client.get_entity(user_id)
-                        
-                        # Check if it's a bot
-                        if hasattr(user, 'bot') and user.bot:
-                            continue
-                        
-                        # Get user display name
-                        user_display = get_user_display(user)
-                        
-                        # Check blacklist
-                        is_blocked, reason = is_blacklisted(user)
-                        if is_blocked:
-                            # If blacklisted, remove them
-                            try:
-                                await event.client.kick_participant(chat, user_id)
-                                print(f"[BLACKLIST] Removed blacklisted user {user_display} from {chat.title}")
-                            except:
-                                pass
-                            continue
-                        
-                        # Send welcome message
-                        welcome_text = JOIN_MESSAGE.format(
-                            user_mention=f"<a href='tg://user?id={user_id}'>{user_display}</a>"
-                        )
-                        
-                        await event.client.send_message(
-                            chat,
-                            welcome_text,
-                            parse_mode='html'
-                        )
-                        
-                        print(f"[JOIN] New member joined: {user_display} in {chat.title}")
-                        
-                    except Exception as e:
-                        print(f"[ERROR] Processing new member: {e}")
+                # Get the new member(s) safely
+                if hasattr(event, 'action_message') and event.action_message:
+                    if hasattr(event.action_message, 'action') and event.action_message.action:
+                        if hasattr(event.action_message.action, 'users'):
+                            users = event.action_message.action.users
+                            
+                            for user_id in users:
+                                try:
+                                    # Get user info
+                                    user = await event.client.get_entity(user_id)
+                                    
+                                    # Check if it's a bot
+                                    if hasattr(user, 'bot') and user.bot:
+                                        continue
+                                    
+                                    # Get user display name
+                                    user_display = get_user_display(user)
+                                    
+                                    # Check blacklist
+                                    is_blocked, reason = is_blacklisted(user)
+                                    if is_blocked:
+                                        # If blacklisted, remove them
+                                        try:
+                                            await event.client.kick_participant(chat, user_id)
+                                            print(f"[BLACKLIST] Removed blacklisted user {user_display} from {chat.title}")
+                                        except:
+                                            pass
+                                        continue
+                                    
+                                    # Send welcome message
+                                    welcome_text = JOIN_MESSAGE.format(
+                                        user_mention=f"<a href='tg://user?id={user_id}'>{user_display}</a>"
+                                    )
+                                    
+                                    await event.client.send_message(
+                                        chat,
+                                        welcome_text,
+                                        parse_mode='html'
+                                    )
+                                    
+                                    print(f"[JOIN] New member joined: {user_display} in {chat.title}")
+                                    
+                                except Exception as e:
+                                    print(f"[ERROR] Processing new member: {e}")
                         
         except Exception as e:
             print(f"[ERROR] Handle new member: {e}")
@@ -484,17 +488,9 @@ class EscrowBot:
                 
                 for participant in participants:
                     if hasattr(participant, 'participant'):
-                        # Check if this is the creator
-                        if hasattr(participant.participant, 'creator'):
-                            if participant.participant.creator:
-                                return participant.id
-                        # Check for admin rights that indicate creator
-                        elif hasattr(participant.participant, 'admin_rights'):
-                            rights = participant.participant.admin_rights
-                            if rights and hasattr(rights, 'other'):
-                                # Creator usually has all rights
-                                if rights.other and rights.post_messages:
-                                    return participant.id
+                        # Check if this is the creator using proper Telethon types
+                        if isinstance(participant.participant, ChannelParticipantCreator):
+                            return participant.id
             except:
                 pass
             
@@ -506,15 +502,6 @@ class EscrowBot:
                     )
                     if hasattr(full_chat, 'full_chat') and hasattr(full_chat.full_chat, 'creator_id'):
                         return full_chat.full_chat.creator_id
-            except:
-                pass
-            
-            # Method 3: Get chat creator from get_permissions
-            try:
-                perms = await self.client.get_permissions(chat, await self.client.get_me())
-                if hasattr(perms, 'creator') and perms.creator:
-                    # If bot is creator (shouldn't happen), return None
-                    pass
             except:
                 pass
             
@@ -574,19 +561,15 @@ class EscrowBot:
                     pass
                 return
             
-            # Get participants - EXCLUDE BOT, GROUP OWNER, AND BLACKLISTED USERS
+            # Get participants - EXCLUDE BOT, GROUP CREATOR, AND BLACKLISTED USERS
             try:
                 participants = await self.client.get_participants(chat)
                 eligible_users = []
                 
                 bot_id = (await self.client.get_me()).id
                 
-                # Get group owner ID
-                group_owner_id = await self.get_group_owner_id(chat)
-                
                 print(f"[BEGIN] Total participants: {len(participants)}")
                 print(f"[BEGIN] Bot ID: {bot_id}")
-                print(f"[BEGIN] Group Owner ID: {group_owner_id}")
                 
                 for participant in participants:
                     participant_id = participant.id
@@ -596,11 +579,11 @@ class EscrowBot:
                         print(f"[BEGIN] Skipping bot: {participant_id}")
                         continue
                     
-                    # Skip group owner
+                    # Skip group creator - FIXED: Use proper Telethon type checking
                     if hasattr(participant, 'participant'):
-                    if isinstance(participant.participant, types.ChannelParticipantCreator):
-                         print(f"[BEGIN] Skipping group creator: {participant_id}")
-                        continue
+                        if isinstance(participant.participant, ChannelParticipantCreator):
+                            print(f"[BEGIN] Skipping group creator: {participant_id}")
+                            continue
                     
                     # Check if it's a bot account
                     if hasattr(participant, 'bot') and participant.bot:
@@ -613,12 +596,12 @@ class EscrowBot:
                         print(f"[BEGIN] Skipping blacklisted user: {participant_id} - {reason}")
                         continue
                     
-                    # Add user as eligible (not bot, not owner, not blacklisted)
+                    # Add user as eligible (not bot, not creator, not blacklisted)
                     eligible_users.append(participant)
                     print(f"[BEGIN] Added eligible user: ID={participant_id}, Name={get_user_display(participant)}")
                 
                 member_count = len(eligible_users)
-                print(f"[BEGIN] Found {member_count} eligible users (excluding bot, owner, blacklisted)")
+                print(f"[BEGIN] Found {member_count} eligible users (excluding bot, creator, blacklisted)")
                 
                 # Need exactly 2 eligible users (for buyer and seller)
                 if member_count != 2:
@@ -631,7 +614,6 @@ class EscrowBot:
                 
                 # Update members
                 group_data["members"] = [u.id for u in eligible_users]
-                group_data["group_owner_id"] = group_owner_id  # Store owner ID for reference
                 groups[group_key] = group_data
                 save_groups(groups)
                 
@@ -769,13 +751,17 @@ class EscrowBot:
                 await event.answer("❌ Bot cannot select roles", alert=True)
                 return
             
-            # Check if this user is the group owner
-            group_data = groups.get(group_id, {})
-            group_owner_id = group_data.get("group_owner_id")
-            
-            if group_owner_id and sender.id == group_owner_id:
-                await event.answer("❌ Group owner cannot select roles", alert=True)
-                return
+            # Check if this user is the group creator - FIXED: Use proper type checking
+            try:
+                participants = await self.client.get_participants(chat, filter=types.ChannelParticipantsAdmins())
+                for participant in participants:
+                    if hasattr(participant, 'participant'):
+                        if isinstance(participant.participant, ChannelParticipantCreator):
+                            if participant.id == sender.id:
+                                await event.answer("❌ Group creator cannot select roles", alert=True)
+                                return
+            except:
+                pass
             
             # Check if this user is one of the 2 eligible users
             eligible_user_ids = group_data.get("members", [])
@@ -787,7 +773,7 @@ class EscrowBot:
             if group_id not in roles:
                 roles[group_id] = {}
             
-            # Check if already chosen
+            # Check if already chosen - FIXED: Use string comparison
             if str(sender.id) in roles[group_id]:
                 await event.answer("⛔ Role Already Chosen", alert=True)
                 return
