@@ -597,8 +597,9 @@ class EscrowBot:
                         continue
                     
                     # Skip group owner
-                    if group_owner_id and participant_id == group_owner_id:
-                        print(f"[BEGIN] Skipping group owner: {participant_id}")
+                    if hasattr(participant, 'participant'):
+                    if isinstance(participant.participant, types.ChannelParticipantCreator):
+                         print(f"[BEGIN] Skipping group creator: {participant_id}")
                         continue
                     
                     # Check if it's a bot account
