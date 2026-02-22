@@ -1,7 +1,7 @@
 # handlers/addresses.py
 """
 Address handlers for OneEscrow Bot
-Upgraded version with /verify, /buyer, /seller, /addresses commands
+Upgraded version with real blockchain data fetching
 """
 
 import re
@@ -9,6 +9,7 @@ import json
 import os
 import logging
 import time
+import aiohttp
 from typing import Dict, Optional, Tuple, List
 from datetime import datetime
 from telethon import events, Button
@@ -55,6 +56,11 @@ ACTIVE_GROUPS_FILE = os.path.join(BASE_DIR, 'data/active_groups.json')
 WALLETS_FILE = os.path.join(BASE_DIR, 'data/wallets.json')
 PENDING_CHANGES_FILE = os.path.join(BASE_DIR, 'data/pending_changes.json')
 
+# API Keys (you should move these to config.py)
+BSCSCAN_API_KEY = "YOUR_BSCSCAN_API_KEY"  # Get from https://bscscan.com/myapikey
+ETHERSCAN_API_KEY = "YOUR_ETHERSCAN_API_KEY"  # Get from https://etherscan.io/myapikey
+POLYGONSCAN_API_KEY = "YOUR_POLYGONSCAN_API_KEY"  # Get from https://polygonscan.com/myapikey
+
 # ==================== DATA MANAGEMENT ====================
 def load_json(filepath: str, default=None):
     """Load JSON with error handling"""
@@ -94,9 +100,210 @@ def normalize_group_id(chat_id) -> str:
         logger.error(f"Error normalizing group ID: {e}")
         return str(chat_id)
 
+# ==================== BLOCKCHAIN DATA FETCHER ====================
+class BlockchainDataFetcher:
+    """Fetch real blockchain data from various explorers"""
+    
+    @staticmethod
+    async def fetch_bsc_data(address: str) -> Dict:
+        """Fetch BSC address data from BSCScan"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                # Get BNB balance
+                balance_url = f"https://api.bscscan.com/api?module=account&action=balance&address={address}&apikey={BSCSCAN_API_KEY}"
+                async with session.get(balance_url) as response:
+                    balance_data = await response.json()
+                
+                # Get last transaction
+                tx_url = f"https://api.bscscan.com/api?module=account&action=txlist&address={address}&sort=desc&offset=1&apikey={BSCSCAN_API_KEY}"
+                async with session.get(tx_url) as response:
+                    tx_data = await response.json()
+                
+                # Parse balance
+                balance = "0"
+                if balance_data.get('status') == '1':
+                    balance_wei = int(balance_data.get('result', 0))
+                    balance = f"{balance_wei / 1e18:.6f} BNB"
+                
+                # Parse last transaction
+                last_txn = "Unavailable"
+                if tx_data.get('status') == '1' and tx_data.get('result'):
+                    latest_tx = tx_data['result'][0]
+                    timestamp = int(latest_tx.get('timeStamp', 0))
+                    tx_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                    last_txn = tx_time
+                
+                return {
+                    'balance': balance,
+                    'last_txn': last_txn,
+                    'explorer': f"https://bscscan.com/address/{address}"
+                }
+        except Exception as e:
+            logger.error(f"Error fetching BSC data: {e}")
+            return {
+                'balance': 'Unavailable',
+                'last_txn': 'Unavailable',
+                'explorer': f"https://bscscan.com/address/{address}"
+            }
+    
+    @staticmethod
+    async def fetch_eth_data(address: str) -> Dict:
+        """Fetch Ethereum address data from EtherScan"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                # Get ETH balance
+                balance_url = f"https://api.etherscan.io/api?module=account&action=balance&address={address}&apikey={ETHERSCAN_API_KEY}"
+                async with session.get(balance_url) as response:
+                    balance_data = await response.json()
+                
+                # Get last transaction
+                tx_url = f"https://api.etherscan.io/api?module=account&action=txlist&address={address}&sort=desc&offset=1&apikey={ETHERSCAN_API_KEY}"
+                async with session.get(tx_url) as response:
+                    tx_data = await response.json()
+                
+                # Parse balance
+                balance = "0"
+                if balance_data.get('status') == '1':
+                    balance_wei = int(balance_data.get('result', 0))
+                    balance = f"{balance_wei / 1e18:.6f} ETH"
+                
+                # Parse last transaction
+                last_txn = "Unavailable"
+                if tx_data.get('status') == '1' and tx_data.get('result'):
+                    latest_tx = tx_data['result'][0]
+                    timestamp = int(latest_tx.get('timeStamp', 0))
+                    tx_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                    last_txn = tx_time
+                
+                return {
+                    'balance': balance,
+                    'last_txn': last_txn,
+                    'explorer': f"https://etherscan.io/address/{address}"
+                }
+        except Exception as e:
+            logger.error(f"Error fetching ETH data: {e}")
+            return {
+                'balance': 'Unavailable',
+                'last_txn': 'Unavailable',
+                'explorer': f"https://etherscan.io/address/{address}"
+            }
+    
+    @staticmethod
+    async def fetch_matic_data(address: str) -> Dict:
+        """Fetch Polygon address data from PolygonScan"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                # Get MATIC balance
+                balance_url = f"https://api.polygonscan.com/api?module=account&action=balance&address={address}&apikey={POLYGONSCAN_API_KEY}"
+                async with session.get(balance_url) as response:
+                    balance_data = await response.json()
+                
+                # Get last transaction
+                tx_url = f"https://api.polygonscan.com/api?module=account&action=txlist&address={address}&sort=desc&offset=1&apikey={POLYGONSCAN_API_KEY}"
+                async with session.get(tx_url) as response:
+                    tx_data = await response.json()
+                
+                # Parse balance
+                balance = "0"
+                if balance_data.get('status') == '1':
+                    balance_wei = int(balance_data.get('result', 0))
+                    balance = f"{balance_wei / 1e18:.6f} MATIC"
+                
+                # Parse last transaction
+                last_txn = "Unavailable"
+                if tx_data.get('status') == '1' and tx_data.get('result'):
+                    latest_tx = tx_data['result'][0]
+                    timestamp = int(latest_tx.get('timeStamp', 0))
+                    tx_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                    last_txn = tx_time
+                
+                return {
+                    'balance': balance,
+                    'last_txn': last_txn,
+                    'explorer': f"https://polygonscan.com/address/{address}"
+                }
+        except Exception as e:
+            logger.error(f"Error fetching MATIC data: {e}")
+            return {
+                'balance': 'Unavailable',
+                'last_txn': 'Unavailable',
+                'explorer': f"https://polygonscan.com/address/{address}"
+            }
+    
+    @staticmethod
+    async def fetch_trx_data(address: str) -> Dict:
+        """Fetch Tron address data from Tronscan"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                # Get TRX balance and last transaction
+                url = f"https://apilist.tronscan.org/api/account?address={address}"
+                async with session.get(url) as response:
+                    data = await response.json()
+                
+                # Parse balance
+                balance = "0"
+                if data.get('balance'):
+                    balance_trx = int(data.get('balance', 0)) / 1e6
+                    balance = f"{balance_trx:.6f} TRX"
+                
+                # Get last transaction
+                last_txn = "Unavailable"
+                if data.get('transactions'):
+                    latest_tx = data['transactions'][0]
+                    timestamp = latest_tx.get('timestamp', 0) / 1000
+                    tx_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                    last_txn = tx_time
+                
+                return {
+                    'balance': balance,
+                    'last_txn': last_txn,
+                    'explorer': f"https://tronscan.org/#/address/{address}"
+                }
+        except Exception as e:
+            logger.error(f"Error fetching TRX data: {e}")
+            return {
+                'balance': 'Unavailable',
+                'last_txn': 'Unavailable',
+                'explorer': f"https://tronscan.org/#/address/{address}"
+            }
+    
+    @staticmethod
+    async def fetch_btc_data(address: str) -> Dict:
+        """Fetch Bitcoin address data from Blockchain.com"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                url = f"https://blockchain.info/rawaddr/{address}"
+                async with session.get(url) as response:
+                    data = await response.json()
+                
+                # Parse balance
+                balance_btc = data.get('final_balance', 0) / 1e8
+                balance = f"{balance_btc:.8f} BTC"
+                
+                # Get last transaction
+                last_txn = "Unavailable"
+                if data.get('txs') and len(data['txs']) > 0:
+                    latest_tx = data['txs'][0]
+                    timestamp = latest_tx.get('time', 0)
+                    tx_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+                    last_txn = tx_time
+                
+                return {
+                    'balance': balance,
+                    'last_txn': last_txn,
+                    'explorer': f"https://blockchain.com/explorer/addresses/btc/{address}"
+                }
+        except Exception as e:
+            logger.error(f"Error fetching BTC data: {e}")
+            return {
+                'balance': 'Unavailable',
+                'last_txn': 'Unavailable',
+                'explorer': f"https://blockchain.com/explorer/addresses/btc/{address}"
+            }
+
 # ==================== BLOCKCHAIN VALIDATOR ====================
 class BlockchainValidator:
-    """Blockchain address validator with explorer URLs"""
+    """Blockchain address validator with explorer URLs and real data"""
     
     # BSC (BEP20) specific patterns - addresses starting with specific prefixes commonly used in BSC
     BSC_PREFIXES = ['0x', 'bnb', 'bsc']
@@ -106,49 +313,57 @@ class BlockchainValidator:
             'name': 'Bitcoin',
             'regex': r'^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,59}$',
             'explorer': 'https://blockchain.com/explorer/addresses/btc/{address}',
-            'color': '\x1b[38;5;226m'  # Yellow
+            'color': '\x1b[38;5;226m',  # Yellow
+            'fetcher': BlockchainDataFetcher.fetch_btc_data
         },
         'ETH': {
             'name': 'Ethereum',
             'regex': r'^0x[a-fA-F0-9]{40}$',
             'explorer': 'https://etherscan.io/address/{address}',
-            'color': '\x1b[38;5;105m'  # Light blue
+            'color': '\x1b[38;5;105m',  # Light blue
+            'fetcher': BlockchainDataFetcher.fetch_eth_data
         },
         'BSC': {
             'name': 'BNB Smart Chain (BEP20)',
             'regex': r'^0x[a-fA-F0-9]{40}$',  # Same regex as ETH
             'explorer': 'https://bscscan.com/address/{address}',
-            'color': '\x1b[38;5;220m'  # Gold
+            'color': '\x1b[38;5;220m',  # Gold
+            'fetcher': BlockchainDataFetcher.fetch_bsc_data
         },
         'TRX': {
             'name': 'Tron',
             'regex': r'^T[a-zA-Z0-9]{33}$',
             'explorer': 'https://tronscan.org/#/address/{address}',
-            'color': '\x1b[38;5;197m'  # Red
+            'color': '\x1b[38;5;197m',  # Red
+            'fetcher': BlockchainDataFetcher.fetch_trx_data
         },
         'LTC': {
             'name': 'Litecoin',
             'regex': r'^(ltc1|[LM])[a-zA-HJ-NP-Z0-9]{26,33}$',
             'explorer': 'https://blockchair.com/litecoin/address/{address}',
-            'color': '\x1b[38;5;39m'  # Blue
+            'color': '\x1b[38;5;39m',  # Blue
+            'fetcher': None  # Add LTC fetcher if needed
         },
         'MATIC': {
             'name': 'Polygon',
             'regex': r'^0x[a-fA-F0-9]{40}$',
             'explorer': 'https://polygonscan.com/address/{address}',
-            'color': '\x1b[38;5;129m'  # Purple
+            'color': '\x1b[38;5;129m',  # Purple
+            'fetcher': BlockchainDataFetcher.fetch_matic_data
         },
         'SOL': {
             'name': 'Solana',
             'regex': r'^[1-9A-HJ-NP-Za-km-z]{32,44}$',
             'explorer': 'https://solscan.io/account/{address}',
-            'color': '\x1b[38;5;141m'  # Purple
+            'color': '\x1b[38;5;141m',  # Purple
+            'fetcher': None  # Add SOL fetcher if needed
         },
         'ADA': {
             'name': 'Cardano',
             'regex': r'^addr1[a-zA-Z0-9]{50,}$',
             'explorer': 'https://cardanoscan.io/address/{address}',
-            'color': '\x1b[38;5;33m'  # Blue
+            'color': '\x1b[38;5;33m',  # Blue
+            'fetcher': None  # Add ADA fetcher if needed
         }
     }
     
@@ -180,31 +395,41 @@ class BlockchainValidator:
                 if hint_lower in chain_code.lower() or hint_lower in chain_name.lower():
                     return chain_code, chain_name
         
-        # Default to Ethereum if multiple matches and no hint
-        # But check if it might be BSC (you can add more sophisticated detection here)
+        # Default to BSC for 0x addresses (most common for USDT BEP20)
         for chain_code, chain_name in possible_chains:
             if chain_code == 'BSC' and address.startswith('0x'):
-                # You could add BSC-specific checks here
-                # For now, we'll return BSC as default for 0x addresses
                 return 'BSC', 'BNB Smart Chain (BEP20)'
         
-        # Default to Ethereum
+        # Default to Ethereum if no BSC match
         return 'ETH', 'Ethereum'
     
     @staticmethod
-    async def verify_address(address: str, user_hint: str = None) -> Tuple[bool, Optional[str], Optional[str], Optional[str]]:
+    async def verify_address(address: str, user_hint: str = None) -> Tuple[bool, Optional[str], Optional[str], Optional[str], Dict]:
         """
-        Verify address and return (is_valid, chain_code, chain_name, explorer_url)
+        Verify address and return (is_valid, chain_code, chain_name, explorer_url, blockchain_data)
         """
         chain_code, chain_name = BlockchainValidator.detect_chain(address, user_hint)
         
         if not chain_code:
-            return False, None, None, None
+            return False, None, None, None, {}
         
         # Get explorer URL
         explorer_url = BlockchainValidator.CHAINS[chain_code]['explorer'].format(address=address)
         
-        return True, chain_code, chain_name, explorer_url
+        # Fetch blockchain data if fetcher exists
+        blockchain_data = {
+            'balance': 'Unavailable',
+            'last_txn': 'Unavailable'
+        }
+        
+        fetcher = BlockchainValidator.CHAINS[chain_code].get('fetcher')
+        if fetcher:
+            try:
+                blockchain_data = await fetcher(address)
+            except Exception as e:
+                logger.error(f"Error fetching blockchain data for {chain_code}: {e}")
+        
+        return True, chain_code, chain_name, explorer_url, blockchain_data
 
 # ==================== ROLE MANAGER ====================
 class RoleManager:
@@ -294,15 +519,15 @@ You are registered as <b>{user_role.upper()}</b>, but trying to use <b>{command_
 Please use <code>/{user_role}</code> instead."""
     
     @staticmethod
-    def buyer_success(user_name: str, address: str, chain_name: str, chain_code: str):
+    def buyer_success(user_name: str, address: str, chain_name: str, chain_code: str, balance: str, last_txn: str):
         return f"""<b>✅ BUYER ADDRESS SAVED SUCCESSFULLY!</b>
 
 <b>Buyer Wallet Stats</b>
 <u>Address :</u>
 
 <blockquote>
-Balance : Unavailable
-Last Txn : Unavailable
+Balance : {balance}
+Last Txn : {last_txn}
 Chain : {chain_name}
 Network : {chain_code}
 </blockquote>
@@ -310,15 +535,15 @@ Network : {chain_code}
 This wallet has been saved for this deal."""
     
     @staticmethod
-    def seller_success(user_name: str, address: str, chain_name: str, chain_code: str):
+    def seller_success(user_name: str, address: str, chain_name: str, chain_code: str, balance: str, last_txn: str):
         return f"""<b>✅ SELLER ADDRESS SAVED SUCCESSFULLY!</b>
 
 <b>Seller Wallet Stats</b>
 <u>Address :</u>
 
 <blockquote>
-Balance : Unavailable
-Last Txn : Unavailable
+Balance : {balance}
+Last Txn : {last_txn}
 Chain : {chain_name}
 Network : {chain_code}
 </blockquote>
@@ -326,13 +551,15 @@ Network : {chain_code}
 This wallet has been saved for this deal."""
     
     @staticmethod
-    def verify_success(address: str, chain_name: str, chain_code: str):
+    def verify_success(address: str, chain_name: str, chain_code: str, balance: str, last_txn: str):
         return f"""<b>🔍 WALLET VERIFICATION</b>
 
 <blockquote>
 Chain : {chain_name}
 Network : {chain_code}
 Valid : Yes
+Balance : {balance}
+Last Txn : {last_txn}
 </blockquote>"""
     
     @staticmethod
@@ -340,10 +567,12 @@ Valid : Yes
         buyer_address = buyer_data.get('address', 'Not Set') if buyer_data else 'Not Set'
         buyer_chain = buyer_data.get('chain_name', '—') if buyer_data else '—'
         buyer_network = buyer_data.get('chain', '—') if buyer_data else '—'
+        buyer_balance = buyer_data.get('balance', '—') if buyer_data else '—'
         
         seller_address = seller_data.get('address', 'Not Set') if seller_data else 'Not Set'
         seller_chain = seller_data.get('chain_name', '—') if seller_data else '—'
         seller_network = seller_data.get('chain', '—') if seller_data else '—'
+        seller_balance = seller_data.get('balance', '—') if seller_data else '—'
         
         if buyer_address != 'Not Set':
             buyer_address = f"<code>{buyer_address[:16]}...{buyer_address[-8:]}</code>"
@@ -359,11 +588,13 @@ Valid : Yes
 Address : {buyer_address}
 Chain : {buyer_chain}
 Network : {buyer_network}
+Balance : {buyer_balance}
 
 <b>SELLER :</b>
 Address : {seller_address}
 Chain : {seller_chain}
-Network : {seller_network}"""
+Network : {seller_network}
+Balance : {seller_balance}"""
     
     @staticmethod
     def chain_mismatch(buyer_chain: str, seller_chain: str):
@@ -375,12 +606,15 @@ Seller Chain : {seller_chain}
 <b>Both parties must use the same blockchain.</b>"""
     
     @staticmethod
-    def escrow_ready(buyer_chain: str):
+    def escrow_ready(buyer_chain: str, buyer_balance: str, seller_balance: str):
         return f"""<b>🎉 ESCROW READY</b>
 
 Both wallets verified
 Same blockchain detected
-Escrow ready for deposit"""
+Escrow ready for deposit
+
+<b>Buyer Balance:</b> {buyer_balance}
+<b>Seller Balance:</b> {seller_balance}"""
     
     @staticmethod
     def already_set(role: str, chain_name: str, address: str):
@@ -539,15 +773,21 @@ class AddressHandler:
             # Show processing
             processing_msg = await event.reply(MessageTemplates.processing(), parse_mode='html')
             
-            # Validate address with hint
-            is_valid, chain_code, chain_name, explorer_url = await self.validator.verify_address(address, user_hint)
+            # Validate address with hint and get blockchain data
+            is_valid, chain_code, chain_name, explorer_url, blockchain_data = await self.validator.verify_address(address, user_hint)
             
             if not is_valid:
                 await processing_msg.edit(MessageTemplates.invalid_format(), parse_mode='html')
                 return
             
-            # Create success message
-            success_msg = MessageTemplates.verify_success(address, chain_name, chain_code)
+            # Create success message with real data
+            success_msg = MessageTemplates.verify_success(
+                address, 
+                chain_name, 
+                chain_code,
+                blockchain_data.get('balance', 'Unavailable'),
+                blockchain_data.get('last_txn', 'Unavailable')
+            )
             
             # Create view button
             buttons = [[Button.url("🔎 View Wallet", explorer_url)]]
@@ -611,8 +851,8 @@ class AddressHandler:
             # Show processing
             processing_msg = await event.reply(MessageTemplates.processing(), parse_mode='html')
             
-            # Validate address with hint
-            is_valid, chain_code, chain_name, explorer_url = await self.validator.verify_address(address, user_hint)
+            # Validate address with hint and get blockchain data
+            is_valid, chain_code, chain_name, explorer_url, blockchain_data = await self.validator.verify_address(address, user_hint)
             
             if not is_valid:
                 await processing_msg.edit(MessageTemplates.invalid_format(), parse_mode='html')
@@ -625,13 +865,15 @@ class AddressHandler:
             # Load addresses
             addresses = load_json(USER_ADDRESSES_FILE, {})
             
-            # Prepare address data
+            # Prepare address data with blockchain info
             address_data = {
                 'user_id': user_id,
                 'user_name': user.first_name or f"User_{user_id}",
                 'address': address,
                 'chain': chain_code,
                 'chain_name': chain_name,
+                'balance': blockchain_data.get('balance', 'Unavailable'),
+                'last_txn': blockchain_data.get('last_txn', 'Unavailable'),
                 'timestamp': time.time(),
                 'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             }
@@ -666,20 +908,24 @@ class AddressHandler:
                 except:
                     pass
             
-            # Send success message with appropriate template
+            # Send success message with appropriate template and real data
             if role == 'buyer':
                 success_msg = MessageTemplates.buyer_success(
                     user.first_name or f"User_{user_id}",
                     address,
                     chain_name,
-                    chain_code
+                    chain_code,
+                    blockchain_data.get('balance', 'Unavailable'),
+                    blockchain_data.get('last_txn', 'Unavailable')
                 )
             else:
                 success_msg = MessageTemplates.seller_success(
                     user.first_name or f"User_{user_id}",
                     address,
                     chain_name,
-                    chain_code
+                    chain_code,
+                    blockchain_data.get('balance', 'Unavailable'),
+                    blockchain_data.get('last_txn', 'Unavailable')
                 )
             
             # Create view button
@@ -753,6 +999,7 @@ class AddressHandler:
 <b>User:</b> {address_data['user_name']}
 <b>Chain:</b> {address_data['chain_name']}
 <b>Address:</b> <code>{address_data['address'][:12]}...{address_data['address'][-6:]}</code>
+<b>Balance:</b> {address_data.get('balance', 'Unavailable')}
 
 ✅ Address verified and saved!"""
             
@@ -838,7 +1085,11 @@ class AddressHandler:
                 # Chains match - escrow ready
                 await self.client.send_message(
                     chat.id,
-                    MessageTemplates.escrow_ready(buyer['chain_name']),
+                    MessageTemplates.escrow_ready(
+                        buyer['chain_name'],
+                        buyer.get('balance', 'Unavailable'),
+                        seller.get('balance', 'Unavailable')
+                    ),
                     parse_mode='html'
                 )
                 logger.info(f"[ 🎉 ] Escrow ready in {chat.title}")
@@ -887,6 +1138,7 @@ if __name__ == "__main__":
     
     Features:
     • HTML parse_mode for all messages
+    • Real blockchain data (balance, last transaction)
     • Blockchain address validation with explorer links
     • BSC (BEP20) support with chain hints
     • Role-based access control
