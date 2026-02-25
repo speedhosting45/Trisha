@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """
-Create escrow handlers - Fixed version
+Create escrow handlers - Fixed version with Premium Custom Emojis
 """
 from telethon.sessions import StringSession
 from telethon.tl import functions, types
 from telethon import Button
-from telethon.tl.types import ChatAdminRights, KeyboardButtonCopy
+from telethon.tl.types import (
+    ChatAdminRights, 
+    MessageEntityCustomEmoji,
+    InputMessageEntityCustomEmoji
+)
 from config import STRING_SESSION1, API_ID, API_HASH, set_bot_username, LOG_CHANNEL_ID
 from telethon import TelegramClient
 import asyncio
@@ -42,20 +46,92 @@ def get_next_number(group_type="p2p"):
 
 async def handle_create(event):
     """
-    Handle create escrow button click
+    Handle create escrow button click with custom emojis
     """
     try:
-        from utils.texts import CREATE_MESSAGE
         from utils.buttons import get_create_buttons
         
+        # The base text with emoji placeholders
+        text = """
+𝘊𝘳𝘦𝘢𝘵𝘦 𝘕𝘦𝘸 𝘌𝘴𝘤𝘳𝘰𝘸 🔩
+
+<blockquote>Select transaction type to proceed</blockquote>
+
+• <b>P2P Deal 🥂</b> – Standard buyer/seller transactions
+• <b>Other Deal ❤️</b> – Custom or multi-party agreements
+
+All escrows operate within private, bot-moderated groups🔥.
+"""
+        
+        # Custom emoji IDs
+        custom_emoji_ids = [
+            5260249805522744465,  # 🔩 emoji
+            5260567255145539253,  # 🥂 emoji
+            5285439518130857782,  # ❤️ emoji
+            5228796381329645973   # 🔥 emoji
+        ]
+        
+        # Find positions of emojis in the text
+        positions = []
+        
+        # Find 🔩 position
+        nut_bolt_pos = text.find("🔩")
+        if nut_bolt_pos != -1:
+            positions.append(nut_bolt_pos)
+        
+        # Find 🥂 position
+        clinking_pos = text.find("🥂")
+        if clinking_pos != -1:
+            positions.append(clinking_pos)
+        
+        # Find ❤️ position
+        heart_pos = text.find("❤️")
+        if heart_pos != -1:
+            positions.append(heart_pos)
+        
+        # Find 🔥 position
+        fire_pos = text.find("🔥")
+        if fire_pos != -1:
+            positions.append(fire_pos)
+        
+        # Create message entities
+        entities = []
+        for i, pos in enumerate(positions):
+            if i < len(custom_emoji_ids):
+                entity = MessageEntityCustomEmoji(
+                    offset=pos,
+                    length=2,  # Length of emoji (2 chars for UTF-16)
+                    document_id=custom_emoji_ids[i]
+                )
+                entities.append(entity)
+        
+        # Send message with custom entities
+        await event.client.send_message(
+            event.chat_id,
+            text,
+            buttons=get_create_buttons(),
+            parse_mode='html',
+            formatting_entities=entities
+        )
+        
+        # Delete the original message if it's a callback
+        try:
+            await event.delete()
+        except:
+            pass
+            
+    except Exception as e:
+        print(f"[ERROR] create handler: {e}")
+        import traceback
+        traceback.print_exc()
+        # Fallback to regular message
+        from utils.texts import CREATE_MESSAGE
+        from utils.buttons import get_create_buttons
         await event.edit(
             CREATE_MESSAGE,
             buttons=get_create_buttons(),
             parse_mode='html'
         )
-    except Exception as e:
-        print(f"[ERROR] create handler: {e}")
-        await event.answer("✅ Create escrow menu", alert=False)
 
 async def handle_create_p2p(event):
     """
