@@ -42,11 +42,8 @@ from utils.buttons import get_main_menu_buttons, get_session_buttons, get_back_b
 from utils.blacklist import is_blacklisted, add_to_blacklist, load_blacklist
 
 # Setup logging
-logging.basicConfig(
-    format='[%(asctime)s] %(message)s',
-    level=logging.INFO,
-    datefmt='%H:%M:%S'
-)
+from core.logger import get_logger
+logger = get_logger("Trisha.core.main")
 
 # Track groups for invite management
 GROUPS_FILE = 'data/active_groups.json'
@@ -67,7 +64,7 @@ def load_groups():
                 return json.load(f)
         return {}
     except Exception as e:
-        print(f"[ERROR] Loading groups: {e}")
+        logger.error(f"Loading groups: {e}")
         return {}
 
 def save_groups(groups):
@@ -77,7 +74,7 @@ def save_groups(groups):
         with open(GROUPS_FILE, 'w') as f:
             json.dump(groups, f, indent=2)
     except Exception as e:
-        print(f"[ERROR] Saving groups: {e}")
+        logger.error(f"Saving groups: {e}")
 
 def load_user_roles():
     """Load user roles data"""
@@ -87,7 +84,7 @@ def load_user_roles():
                 return json.load(f)
         return {}
     except Exception as e:
-        print(f"[ERROR] Loading roles: {e}")
+        logger.error(f"Loading roles: {e}")
         return {}
 
 def save_user_roles(roles):
@@ -97,7 +94,7 @@ def save_user_roles(roles):
         with open(USER_ROLES_FILE, 'w') as f:
             json.dump(roles, f, indent=2)
     except Exception as e:
-        print(f"[ERROR] Saving roles: {e}")
+        logger.error(f"Saving roles: {e}")
 
 def load_wallets():
     """Load wallet addresses data"""
@@ -107,7 +104,7 @@ def load_wallets():
                 return json.load(f)
         return {}
     except Exception as e:
-        print(f"[ERROR] Loading wallets: {e}")
+        logger.error(f"Loading wallets: {e}")
         return {}
 
 def save_wallets(wallets):
@@ -117,7 +114,7 @@ def save_wallets(wallets):
         with open(WALLETS_FILE, 'w') as f:
             json.dump(wallets, f, indent=2)
     except Exception as e:
-        print(f"[ERROR] Saving wallets: {e}")
+        logger.error(f"Saving wallets: {e}")
 
 def get_user_display(user_obj):
     """Get clean display name for user"""
@@ -159,7 +156,7 @@ def get_user_display(user_obj):
         return full_name
         
     except Exception as e:
-        print(f"[ERROR] Getting user display: {e}")
+        logger.error(f"Getting user display: {e}")
         return f"User_{getattr(user_obj, 'id', 'unknown')}"
 
 def clean_group_id(chat_id):
@@ -171,7 +168,7 @@ def clean_group_id(chat_id):
             return chat_id[4:]
         return chat_id
     except Exception as e:
-        print(f"[ERROR] Cleaning group ID: {e}")
+        logger.error(f"Cleaning group ID: {e}")
         return str(chat_id)
 
 async def set_group_photo(client, chat, photo_path):
@@ -188,10 +185,10 @@ async def set_group_photo(client, chat, photo_path):
                     photo=types.InputChatUploadedPhoto(file=file)
                 )
             )
-            print("[SUCCESS] Group photo updated via messages.EditChatPhotoRequest")
+            logger.success("Group photo updated via messages.EditChatPhotoRequest")
             return True
         except Exception as e1:
-            print(f"[DEBUG] Normal group photo update failed: {e1}")
+            logger.info(f"Normal group photo update failed: {e1}")
             
             # Fallback for supergroups / channels
             try:
@@ -201,28 +198,28 @@ async def set_group_photo(client, chat, photo_path):
                         photo=types.InputChatUploadedPhoto(file=file)
                     )
                 )
-                print("[SUCCESS] Group photo updated via channels.EditPhotoRequest")
+                logger.success("Group photo updated via channels.EditPhotoRequest")
                 return True
             except Exception as e2:
-                print(f"[DEBUG] Channel photo update failed: {e2}")
+                logger.info(f"Channel photo update failed: {e2}")
                 
                 # Try the simple edit_photo method as last resort
                 try:
                     await client.edit_photo(chat, photo=photo_path)
-                    print("[SUCCESS] Group photo updated via edit_photo")
+                    logger.success("Group photo updated via edit_photo")
                     return True
                 except Exception as e3:
-                    print(f"[DEBUG] Simple edit_photo failed: {e3}")
+                    logger.info(f"Simple edit_photo failed: {e3}")
                     raise Exception(f"All photo update methods failed: {e1}, {e2}, {e3}")
 
     except Exception as e:
-        print(f"[ERROR] set_group_photo: {e}")
+        logger.error(f"set_group_photo: {e}")
         raise e
 
 async def download_profile_picture(client, user_id):
     """Download user's profile picture"""
     try:
-        print(f"[PHOTO] Downloading profile picture for user_id: {user_id}")
+        logger.info(f"Downloading profile picture for user_id: {user_id}")
         
         # Get user entity
         user = await client.get_entity(user_id)
@@ -233,15 +230,15 @@ async def download_profile_picture(client, user_id):
         if photo_bytes:
             # Open from BytesIO
             img = Image.open(BytesIO(photo_bytes)).convert("RGBA")
-            print(f"[PHOTO] Successfully downloaded profile picture for {user_id}")
+            logger.info(f"Successfully downloaded profile picture for {user_id}")
             return img
         else:
             # No profile picture, use fallback
-            print(f"[PHOTO] No profile picture for {user_id}, using fallback")
+            logger.info(f"No profile picture for {user_id}, using fallback")
             return load_unknown_pfp()
             
     except Exception as e:
-        print(f"[ERROR] Downloading profile picture for {user_id}: {e}")
+        logger.error(f"Downloading profile picture for {user_id}: {e}")
         return load_unknown_pfp()
 
 def load_unknown_pfp():
@@ -249,14 +246,14 @@ def load_unknown_pfp():
     try:
         if os.path.exists(UNKNOWN_PFP):
             img = Image.open(UNKNOWN_PFP).convert("RGBA")
-            print(f"[PHOTO] Loaded unknown.png fallback")
+            logger.info(f"Loaded unknown.png fallback")
             return img
         else:
             # Create a simple fallback if unknown.png doesn't exist
-            print(f"[WARNING] {UNKNOWN_PFP} not found, creating default fallback")
+            logger.warning(f"{UNKNOWN_PFP} not found, creating default fallback")
             return create_default_fallback()
     except Exception as e:
-        print(f"[ERROR] Loading unknown.png: {e}")
+        logger.error(f"Loading unknown.png: {e}")
         return create_default_fallback()
 
 def create_default_fallback():
@@ -294,7 +291,7 @@ def create_default_fallback():
         return image
         
     except Exception as e:
-        print(f"[ERROR] Creating default fallback: {e}")
+        logger.error(f"Creating default fallback: {e}")
         # Last resort: solid color image
         return Image.new('RGBA', (400, 400), (100, 100, 100, 255))
 
@@ -325,7 +322,7 @@ async def create_merged_photo(client, buyer_id, seller_id):
         
         # Check base image exists
         if not os.path.exists(BASE_START_IMAGE):
-            print(f"[ERROR] Base image not found: {BASE_START_IMAGE}")
+            logger.error(f"Base image not found: {BASE_START_IMAGE}")
             return False, None, "Base image not found"
         
         # Download profile pictures
@@ -376,7 +373,7 @@ async def create_merged_photo(client, buyer_id, seller_id):
         return True, img_bytes, "✅ Merged photo created"
         
     except Exception as e:
-        print(f"[ERROR] Creating merged photo: {e}")
+        logger.error(f"Creating merged photo: {e}")
         import traceback
         traceback.print_exc()
         return False, None, f"❌ Error creating merged photo: {e}"
@@ -504,7 +501,7 @@ class EscrowBot:
                                         # If blacklisted, remove them
                                         try:
                                             await event.client.kick_participant(chat, user_id)
-                                            print(f"[BLACKLIST] Removed blacklisted user {user_display} from {chat.title}")
+                                            logger.info(f"Removed blacklisted user {user_display} from {chat.title}")
                                         except:
                                             pass
                                         continue
@@ -520,13 +517,13 @@ class EscrowBot:
                                         parse_mode='html'
                                     )
                                     
-                                    print(f"[JOIN] New member joined: {user_display} in {chat.title}")
+                                    logger.info(f"New member joined: {user_display} in {chat.title}")
                                     
                                 except Exception as e:
-                                    print(f"[ERROR] Processing new member: {e}")
+                                    logger.error(f"Processing new member: {e}")
                         
         except Exception as e:
-            print(f"[ERROR] Handle new member: {e}")
+            logger.error(f"Handle new member: {e}")
     
     async def get_group_owner_id(self, chat):
         """Get the Telegram user ID of the group owner/creator"""
@@ -559,7 +556,7 @@ class EscrowBot:
             return None
             
         except Exception as e:
-            print(f"[ERROR] Getting group owner: {e}")
+            logger.error(f"Getting group owner: {e}")
             return None
     
     async def handle_begin_command(self, event):
@@ -615,40 +612,40 @@ class EscrowBot:
                 
                 bot_id = (await self.client.get_me()).id
                 
-                print(f"[BEGIN] Total participants: {len(participants)}")
-                print(f"[BEGIN] Bot ID: {bot_id}")
+                logger.info(f"Total participants: {len(participants)}")
+                logger.info(f"Bot ID: {bot_id}")
                 
                 for participant in participants:
                     participant_id = participant.id
                     
                     # Skip bot
                     if participant_id == bot_id:
-                        print(f"[BEGIN] Skipping bot: {participant_id}")
+                        logger.info(f"Skipping bot: {participant_id}")
                         continue
                     
                     # Skip group creator
                     if hasattr(participant, 'participant'):
                         if isinstance(participant.participant, ChannelParticipantCreator):
-                            print(f"[BEGIN] Skipping group creator: {participant_id}")
+                            logger.info(f"Skipping group creator: {participant_id}")
                             continue
                     
                     # Check if it's a bot account
                     if hasattr(participant, 'bot') and participant.bot:
-                        print(f"[BEGIN] Skipping bot account: {participant_id}")
+                        logger.info(f"Skipping bot account: {participant_id}")
                         continue
                     
                     # Check if blacklisted
                     is_blocked, reason = is_blacklisted(participant)
                     if is_blocked:
-                        print(f"[BEGIN] Skipping blacklisted user: {participant_id} - {reason}")
+                        logger.info(f"Skipping blacklisted user: {participant_id} - {reason}")
                         continue
                     
                     # Add user as eligible
                     eligible_users.append(participant)
-                    print(f"[BEGIN] Added eligible user: ID={participant_id}, Name={get_user_display(participant)}")
+                    logger.info(f"Added eligible user: ID={participant_id}, Name={get_user_display(participant)}")
                 
                 member_count = len(eligible_users)
-                print(f"[BEGIN] Found {member_count} eligible users (excluding bot, creator, blacklisted)")
+                logger.info(f"Found {member_count} eligible users (excluding bot, creator, blacklisted)")
                 
                 # Need exactly 2 eligible users
                 if member_count != 2:
@@ -674,9 +671,9 @@ class EscrowBot:
                 # Get the 2 eligible users
                 user1, user2 = eligible_users[0], eligible_users[1]
                 
-                print(f"[BEGIN] Selected users for roles:")
-                print(f"[BEGIN]   User1: ID={user1.id}, Display={get_user_display(user1)}")
-                print(f"[BEGIN]   User2: ID={user2.id}, Display={get_user_display(user2)}")
+                logger.info(f"Selected users for roles:")
+                logger.info(f"  User1: ID={user1.id}, Display={get_user_display(user1)}")
+                logger.info(f"  User2: ID={user2.id}, Display={get_user_display(user2)}")
                 
                 # Create merged photo
                 success, image_bytes, message = await create_merged_photo(
@@ -715,9 +712,9 @@ class EscrowBot:
                     except:
                         pass
                     
-                    print(f"[PHOTO] Merged preview sent for {chat_title}")
+                    logger.info(f"Merged preview sent for {chat_title}")
                 else:
-                    print(f"[ERROR] Failed to create merged photo: {message}")
+                    logger.error(f"Failed to create merged photo: {message}")
                     # Send text message instead
                     await self.client.send_message(
                         chat,
@@ -733,7 +730,7 @@ class EscrowBot:
                 groups[group_key] = group_data
                 save_groups(groups)
                 
-                print(f"[SUCCESS] Session initiated in {chat_title}")
+                logger.success(f"Session initiated in {chat_title}")
                 
                 # Log to channel if needed
                 try:
@@ -753,10 +750,10 @@ class EscrowBot:
                     # Send to log channel if configured
                     # await self.client.send_message(LOG_CHANNEL_ID, log_message, parse_mode='html')
                 except Exception as e:
-                    print(f"[ERROR] Logging to channel: {e}")
+                    logger.error(f"Logging to channel: {e}")
                 
             except Exception as e:
-                print(f"[ERROR] /begin: {e}")
+                logger.error(f"/begin: {e}")
                 import traceback
                 traceback.print_exc()
                 try:
@@ -765,7 +762,7 @@ class EscrowBot:
                     pass
             
         except Exception as e:
-            print(f"[ERROR] Handling /begin: {e}")
+            logger.error(f"Handling /begin: {e}")
             import traceback
             traceback.print_exc()
     
@@ -890,7 +887,7 @@ class EscrowBot:
                 parse_mode='html'
             )
             
-            print(f"[ROLE] {get_user_display(sender)} selected as {role_name}")
+            logger.info(f"{get_user_display(sender)} selected as {role_name}")
             
             # Check if both roles selected
             buyer_count = sum(1 for u in roles[group_id].values() if u.get("role") == "buyer")
@@ -915,7 +912,7 @@ class EscrowBot:
                 await self.finalize_session(chat, group_id, roles[group_id], group_data)
                 
         except Exception as e:
-            print(f"[ERROR] Role selection: {e}")
+            logger.error(f"Role selection: {e}")
             import traceback
             traceback.print_exc()
             await event.answer("❌ Error selecting role", alert=True)
@@ -940,7 +937,7 @@ class EscrowBot:
             group_type = group_data.get("type", "p2p")
             group_type_display = "P2P" if group_type == "p2p" else "OTC"
             
-            print(f"[FINAL] Finalizing {group_type_display} escrow")
+            logger.info(f"Finalizing {group_type_display} escrow")
             
             # Load wallet addresses from wallets file
             wallets = load_wallets()
@@ -984,10 +981,10 @@ class EscrowBot:
                 parse_mode='html'
             )
             
-            print(f"[FINAL] {group_type_display} escrow finalized: {buyer['name']} ↔ {seller['name']}")
+            logger.success(f"{group_type_display} escrow finalized: {buyer['name']} ↔ {seller['name']}")
             
         except Exception as e:
-            print(f"[ERROR] Finalizing session: {e}")
+            logger.error(f"Finalizing session: {e}")
             import traceback
             traceback.print_exc()
     
@@ -1013,7 +1010,7 @@ class EscrowBot:
             group_type = group_data.get("type", "p2p")
             group_type_display = "P2P" if group_type == "p2p" else "OTC"
             
-            print(f"[PFP] Generating final logo for {group_type_display} escrow")
+            logger.info(f"Generating final logo for {group_type_display} escrow")
             
             # Use PFPGenerator to create logo
             try:
@@ -1046,16 +1043,16 @@ class EscrowBot:
                         except:
                             pass
                         
-                        print(f"[PFP] Final {group_type_display} PFP logo updated!")
+                        logger.success(f"Final {group_type_display} PFP logo updated!")
                         
                     except Exception as e:
-                        print(f"[ERROR] Could not update final group photo: {e}")
+                        logger.error(f"Could not update final group photo: {e}")
                 else:
-                    print(f"[ERROR] Failed to create final PFP logo: {message}")
+                    logger.error(f"Failed to create final PFP logo: {message}")
             except ImportError:
-                print(f"[WARNING] PFPGenerator not available, skipping logo generation")
+                logger.warning(f"PFPGenerator not available, skipping logo generation")
             except Exception as e:
-                print(f"[ERROR] PFP generation: {e}")
+                logger.error(f"PFP generation: {e}")
             
             # Send final confirmation
             message_text = PARTICIPANTS_CONFIRMED_MESSAGE.format(
@@ -1085,20 +1082,20 @@ class EscrowBot:
             )
             
         except Exception as e:
-            print(f"[ERROR] Generating final PFP logo: {e}")
+            logger.error(f"Generating final PFP logo: {e}")
             import traceback
             traceback.print_exc()
 
     async def start_bot(self):
         """Start the bot"""
         try:
-            print("═"*50)
-            print("🔐 SECURE ESCROW BOT")
-            print("═"*50)
+            logger.info("═"*50)
+            logger.info("🔐 SECURE ESCROW BOT")
+            logger.info("═"*50)
             
             # Check config
             if not API_ID or not API_HASH or not BOT_TOKEN:
-                print("❌ Missing configuration")
+                logger.error("Missing configuration")
                 sys.exit(1)
             
             # Check assets
@@ -1110,38 +1107,39 @@ class EscrowBot:
             # Get bot info
             me = await self.client.get_me()
             
-            print(f"✅ Bot: @{me.username}")
-            print(f"🆔 ID: {me.id}")
-            print("═"*50)
+            logger.success(f"Bot: @{me.username}")
+            logger.info(f"ID: {me.id}")
+            logger.info("═"*50)
             
-            print("\n🚀 FEATURES:")
-            print("   • P2P & OTC Escrow Creation")
-            print("   • Profile picture preview on /begin")
-            print("   • PFP logo generation on role confirmation")
-            print("   • Role selection system")
-            print("   • Address management (/buyer, /seller, /addresses)")
-            print("   • Blacklist system")
-            print("   • Works with users without usernames")
-            print("   • Welcome message when new members join")
-            print("   • Auto-removal of blacklisted users")
-            print("\n📡 Bot is ready...")
-            print("   Ctrl+C to stop\n")
+            logger.info("🚀 FEATURES:")
+            logger.info("   • P2P & OTC Escrow Creation")
+            logger.info("   • Profile picture preview on /begin")
+            logger.info("   • PFP logo generation on role confirmation")
+            logger.info("   • Role selection system")
+            logger.info("   • Address management (/buyer, /seller, /addresses)")
+            logger.info("   • Blacklist system")
+            logger.info("   • Works with users without usernames")
+            logger.info("   • Welcome message when new members join")
+            logger.info("   • Auto-removal of blacklisted users")
+            logger.info("")
+            logger.info("📡 Bot is ready...")
+            logger.info("   Ctrl+C to stop\n")
             
             # Run
             await self.client.run_until_disconnected()
             
         except KeyboardInterrupt:
-            print("\n👋 Bot stopped")
+            logger.info("👋 Bot stopped")
         except Exception as e:
-            print(f"\n❌ Error: {e}")
+            logger.error(f"Error: {e}")
             import traceback
             traceback.print_exc()
         finally:
-            print("\n🔴 Shutdown complete")
+            logger.info("🔴 Shutdown complete")
     
     def check_assets(self):
         """Check if required assets exist"""
-        print("\n📁 Checking assets...")
+        logger.info("Checking assets...")
         
         # Create necessary directories
         os.makedirs('assets', exist_ok=True)
@@ -1153,25 +1151,25 @@ class EscrowBot:
         
         for asset in required_assets:
             if not os.path.exists(asset):
-                print(f"❌ REQUIRED asset missing: {asset}")
+                logger.error(f"REQUIRED asset missing: {asset}")
                 if asset == UNKNOWN_PFP:
-                    print("   Creating unknown.png fallback...")
+                    logger.info("Creating unknown.png fallback...")
                     # Create a simple unknown.png
                     img = create_default_fallback()
                     img.save(UNKNOWN_PFP)
-                    print(f"   Created {UNKNOWN_PFP}")
+                    logger.info(f"Created {UNKNOWN_PFP}")
                 elif asset == BASE_START_IMAGE:
-                    print(f"   Please add {BASE_START_IMAGE} for /begin preview")
+                    logger.info(f"Please add {BASE_START_IMAGE} for /begin preview")
                 elif asset == PFP_TEMPLATE:
-                    print(f"   Please add {PFP_TEMPLATE} for final PFP logo")
+                    logger.info(f"Please add {PFP_TEMPLATE} for final PFP logo")
         
         # Check font
         font_path = "assets/Skynight.otf"
         if not os.path.exists(font_path):
-            print(f"⚠️  Font file missing: {font_path}")
-            print("   PFP logos will use default font")
+            logger.warning(f"Font file missing: {font_path}")
+            logger.info("PFP logos will use default font")
         
-        print("✅ Asset check complete\n")
+        logger.info("Asset check complete\n")
 
 async def main_async():
     """Async main function"""
