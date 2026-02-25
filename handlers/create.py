@@ -45,15 +45,10 @@ def get_next_number(group_type="p2p"):
         return 1
 
 async def handle_create(event):
-    """
-    Handle create escrow button click with custom emojis - UTF-16 safe
-    Using exact offsets: 54, 133, 193, 292 with length=2
-    """
     try:
         from utils.buttons import get_create_buttons
-        
-        # The base text with emoji placeholders (exact same as original)
-        raw_text = """
+
+        text = """
 𝘊𝘳𝘦𝘢𝘵𝘦 𝘕𝘦𝘸 𝘌𝘴𝘤𝘳𝘰𝘸 🔩
 
 <blockquote>Select transaction type to proceed</blockquote>
@@ -63,52 +58,39 @@ async def handle_create(event):
 
 All escrows operate within private, bot-moderated groups🔥.
 """
-        
-        # Custom emoji IDs in order of appearance
-        custom_emoji_ids = [
-            5260249805522744465,  # 🔩 emoji (offset 54)
-            5260567255145539253,  # 🥂 emoji (offset 133)
-            5285439518130857782,  # ❤️ emoji (offset 193)
-            5228796381329645973   # 🔥 emoji (offset 292)
-        ]
-        
-        # Convert to UTF-16 safe string using add_surrogate
-        # This ensures proper offset calculation
-        text = add_surrogate(raw_text)
-        
-        # Create message entities with the exact offsets provided
-        # These offsets are already in UTF-16 code units
+
         entities = [
             MessageEntityCustomEmoji(
-                offset=54,  # UTF-16 offset for 🔩
-                length=2,   # Length in UTF-16 code units
-                document_id=custom_emoji_ids[0]
+                offset=54,
+                length=2,
+                document_id=5260249805522744465
             ),
             MessageEntityCustomEmoji(
-                offset=133,  # UTF-16 offset for 🥂
+                offset=133,
                 length=2,
-                document_id=custom_emoji_ids[1]
+                document_id=5260567255145539253
             ),
             MessageEntityCustomEmoji(
-                offset=193,  # UTF-16 offset for ❤️
+                offset=193,
                 length=2,
-                document_id=custom_emoji_ids[2]
+                document_id=5285439518130857782
             ),
             MessageEntityCustomEmoji(
-                offset=292,  # UTF-16 offset for 🔥
+                offset=292,
                 length=2,
-                document_id=custom_emoji_ids[3]
+                document_id=5228796381329645973
             )
         ]
-        
-        # Send message with custom entities using entities= parameter
-        await event.client.send_message(
-             event.chat_id,
-             text,
-             buttons=get_create_buttons(),
-             parse_mode='html',
-             formatting_entities=entities
+
+        await event.edit(
+            text,
+            buttons=get_create_buttons(),
+            parse_mode="html",
+            formatting_entities=entities  # <-- for your Telethon version
         )
+
+    except Exception as e:
+        print(f"[ERROR] create handler: {e}")
         
         # Delete the original message if it's a callback
         try:
