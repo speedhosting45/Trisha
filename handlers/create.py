@@ -103,11 +103,11 @@ All escrows operate within private, bot-moderated groups🔥.
         
         # Send message with custom entities using entities= parameter
         await event.client.send_message(
-            event.chat_id,
-            text,  # This is the add_surrogate version
-            buttons=get_create_buttons(),
-            parse_mode='html',
-            entities=entities  # Use entities= NOT formatting_entities
+             event.chat_id,
+             text,
+             buttons=get_create_buttons(),
+             parse_mode='html',
+             formatting_entities=entities
         )
         
         # Delete the original message if it's a callback
