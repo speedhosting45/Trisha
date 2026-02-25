@@ -6,9 +6,8 @@ from telethon.sessions import StringSession
 from telethon.tl import functions, types
 from telethon import Button
 from telethon.tl.types import (
-    ChatAdminRights, 
-    MessageEntityCustomEmoji,
-    InputMessageEntityCustomEmoji
+    ChatAdminRights,
+    MessageEntityCustomEmoji
 )
 from config import STRING_SESSION1, API_ID, API_HASH, set_bot_username, LOG_CHANNEL_ID
 from telethon import TelegramClient
