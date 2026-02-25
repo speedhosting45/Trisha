@@ -183,60 +183,48 @@ async def handle_create_p2p(event):
             raw_text = f"""
 𝘗2𝘗 𝘌𝘴𝘤𝘳𝘰𝘸 𝘌𝘴𝘵𝘢𝘣𝘭𝘪𝘴𝘩𝘦𝘥 💵
 
-<blockquote>Secure transaction group created 🚀</blockquote>
+Secure transaction group created 🚀
 
-<b>Group:</b> {group_name} 
-<b>Type:</b> P2P Transaction 🎈
-<b>Status:</b> Ready for configuration 
+Group: {group_name}
+Type: P2P Transaction 🎈
+Status: Ready for configuration
 
-<code>{result["invite_url"]}</code>
+{result["invite_url"]}
 
-Proceed to the group to configure participants and terms ⚖️<a href="{P2P_IMAGE}">.</a>
+Proceed to the group to configure participants and terms ⚖️
 """
-            
-            # Convert to UTF-16 safe string using add_surrogate
-            text = add_surrogate(raw_text)
-            
-            # Custom emoji IDs with their exact offsets
-            entities = [
-                # 💵 at offset 68
-                MessageEntityCustomEmoji(
-                    offset=68,
-                    length=2,
-                    document_id=5409048419211682843
-                ),
-                # 🚀 at offset 117
-                MessageEntityCustomEmoji(
-                    offset=117,
-                    length=2,
-                    document_id=5258332798409783582
-                ),
-                # 🎈 at offset 190
-                MessageEntityCustomEmoji(
-                    offset=190,
-                    length=2,
-                    document_id=5278651867780377852
-                ),
-                # ⚖️ at offset 325
-                MessageEntityCustomEmoji(
-                    offset=325,
-                    length=2,
-                    document_id=5400250414929041085
-                ),
-                # URL entity at offset 336, length 35
-                MessageEntityUrl(
-                    offset=336,
-                    length=35
-                )
-            ]
-            
-            # Send final message with all entities
-            await event.edit(
-                text,
-                buttons=buttons,
-                formatting_entities=entities,
-                link_preview=True
-            )
+
+safe_text = raw_text  # this is what we send
+surrogate_text = add_surrogate(raw_text)  # ONLY for offset calculation
+
+emoji_map = {
+    "💵": 5409048419211682843,
+    "🚀": 5258332798409783582,
+    "🎈": 5278651867780377852,
+    "⚖️": 5400250414929041085,
+}
+
+entities = []
+
+for emoji, doc_id in emoji_map.items():
+    index = surrogate_text.index(emoji)
+    utf16_offset = index
+    utf16_length = len(add_surrogate(emoji))
+
+    entities.append(
+        MessageEntityCustomEmoji(
+            offset=utf16_offset,
+            length=utf16_length,
+            document_id=doc_id
+        )
+    )
+
+await event.edit(
+    raw_text,   # ✅ send normal string
+    formatting_entities=entities,
+    buttons=buttons,
+    link_preview=True
+)
             
             print(f"[SUCCESS] P2P Escrow created: {group_name}")
             
