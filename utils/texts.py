@@ -20,14 +20,14 @@ ADDRESSES_MENU_TEXT = (
 )
 
 CREATE_MESSAGE = """
-𝘊𝘳𝘦𝘢𝘵𝘦 𝘕𝘦𝘸 𝘌𝘴𝘤𝘳𝘰𝘸
+𝘊𝘳𝘦𝘢𝘵𝘦 𝘕𝘦𝘸 𝘌𝘴𝘤𝘳𝘰𝘸 🔩
 
 <blockquote>Select transaction type to proceed</blockquote>
 
-• <b>P2P Deal</b> – Standard buyer/seller transactions
-• <b>Other Deal</b> – Custom or multi-party agreements
+• <b>P2P Deal 🥂</b> – Standard buyer/seller transactions
+• <b>Other Deal ❤️</b> – Custom or multi-party agreements
 
-All escrows operate within private, bot-moderated groups.
+All escrows operate within private, bot-moderated groups🔥.
 """
 # Address Handler Messages - Professional Style
 
