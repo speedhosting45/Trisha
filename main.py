@@ -29,7 +29,7 @@ from handlers.addresses import setup_address_handlers
 
 # Import utilities
 from utils.texts import (
-    START_MESSAGE, CREATE_MESSAGE, P2P_CREATED_MESSAGE, OTHER_CREATED_MESSAGE,
+    _MESSAGE, CREATE_MESSAGE, P2P_CREATED_MESSAGE, OTHER_CREATED_MESSAGE,
     WELCOME_MESSAGE, SESSION_INITIATED_MESSAGE, INSUFFICIENT_MEMBERS_MESSAGE,
     SESSION_ALREADY_INITIATED_MESSAGE, GROUP_NOT_FOUND_MESSAGE,
     MERGED_PHOTO_CAPTION, PARTICIPANTS_CONFIRMED_MESSAGE, JOIN_MESSAGE,
@@ -1087,7 +1087,7 @@ class EscrowBot:
             traceback.print_exc()
 
     async def start_bot(self):
-    """Start the bot"""
+        """Start the bot"""
     try:
         # Check config
         if not API_ID or not API_HASH or not BOT_TOKEN:
