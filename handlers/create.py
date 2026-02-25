@@ -137,7 +137,7 @@ async def handle_create(event):
 
 async def handle_create_p2p(event):
     """
-    Handle P2P deal selection with premium custom emojis - UTF-16 safe
+    Handle P2P deal selection with premium custom emojis - HTML + Custom Emoji Entities
     """
     try:
         # Get user mention
@@ -177,17 +177,17 @@ async def handle_create_p2p(event):
             # Get buttons
             buttons = get_p2p_created_buttons(result["invite_url"])
             
-            # Normal text (no HTML tags since we're using entities)
+            # HTML text with all formatting - this will be parsed by Telethon
             text = f"""
-𝘗2𝘗 𝘌𝘴𝘤𝘳𝘰𝘸 𝘌𝘴𝘵𝘢𝘣𝘭𝘪𝘴𝘩𝘦𝘥 💵
+<b>𝘗2𝘗 𝘌𝘴𝘤𝘳𝘰𝘸 𝘌𝘴𝘵𝘢𝘣𝘭𝘪𝘴𝘩𝘦𝘥</b> 💵
 
-Secure transaction group created 🚀
+<blockquote>Secure transaction group created 🚀</blockquote>
 
-Group: {group_name}
-Type: P2P Transaction 🎈
-Status: Ready for configuration
+<b>Group:</b> {group_name}
+<b>Type:</b> P2P Transaction 🎈
+<b>Status:</b> Ready for configuration
 
-{result["invite_url"]}
+<code>{result["invite_url"]}</code>
 
 Proceed to the group to configure participants and terms ⚖️
 """
@@ -202,7 +202,7 @@ Proceed to the group to configure participants and terms ⚖️
             
             entities = []
             
-            # Calculate UTF-16 offsets correctly WITHOUT surrogate
+            # Calculate UTF-16 offsets for custom emojis
             for emoji, doc_id in emoji_map.items():
                 try:
                     # Find position in normal text
@@ -231,11 +231,13 @@ Proceed to the group to configure participants and terms ⚖️
             # Sort entities by offset to ensure proper order
             entities.sort(key=lambda e: e.offset)
             
-            # Send with normal text (NO surrogates, NO HTML)
+            # Send with HTML parsing AND custom emoji entities
+            # Telethon will first parse HTML, then apply custom emoji entities
             await event.edit(
                 text,
+                parse_mode='html',           # ✅ HTML formatting
+                formatting_entities=entities, # ✅ Only custom emojis here
                 buttons=buttons,
-                formatting_entities=entities,
                 link_preview=True
             )
             
@@ -244,6 +246,44 @@ Proceed to the group to configure participants and terms ⚖️
         else:
             await event.edit(
                 "𝘌𝘴𝘤𝘳𝘰𝘸 𝘊𝘳𝘦𝘢𝘵𝘪𝘰𝘯 𝘍𝘢𝘪𝘭𝘦𝘥\n\nPlease try again later",
+                buttons=[Button.inline("🔄 Try Again", b"create")]
+            )
+            
+    except Exception as e:
+        print(f"[ERROR] P2P handler: {e}")
+        import traceback
+        traceback.print_exc()
+        # Fallback to regular message without custom emojis
+        try:
+            from utils.texts import P2P_CREATED_MESSAGE
+            from utils.buttons import get_p2p_created_buttons
+            
+            # Create group again if needed
+            if 'result' not in locals() or not result:
+                result = await create_escrow_group(group_name, bot_username, "p2p", event.client, user.id)
+            
+            if result and "invite_url" in result:
+                message = P2P_CREATED_MESSAGE.format(
+                    GROUP_NUMBER=group_number,
+                    GROUP_INVITE_LINK=result["invite_url"],
+                    GROUP_NAME=group_name,
+                    P2P_IMAGE=P2P_IMAGE
+                )
+                await event.edit(
+                    message,
+                    parse_mode='html',
+                    link_preview=True,
+                    buttons=get_p2p_created_buttons(result["invite_url"])
+                )
+            else:
+                await event.edit(
+                    "𝘌𝘴𝘤𝘳𝘰𝘸 𝘊𝘳𝘦𝘢𝘵𝘪𝘰𝘯 𝘍𝘢𝘪𝘭𝘦𝘥\n\nPlease try again later",
+                    buttons=[Button.inline("🔄 Try Again", b"create")]
+                )
+        except Exception as fallback_error:
+            print(f"[ERROR] P2P fallback: {fallback_error}")
+            await event.edit(
+                "𝘌𝘳𝘳𝘰𝘳 𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘌𝘴𝘤𝘳𝘰𝘸\n\nTechnical issue detected",
                 buttons=[Button.inline("🔄 Try Again", b"create")]
             )
             
