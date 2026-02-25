@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-Create escrow handlers - Fixed version with Premium Custom Emojis
+Create escrow handlers - Fixed version with Premium Custom Emojis (UTF-16 safe)
 """
 from telethon.sessions import StringSession
 from telethon.tl import functions, types
 from telethon import Button
 from telethon.tl.types import (
-    ChatAdminRights,
+    ChatAdminRights, 
     MessageEntityCustomEmoji
 )
+from telethon.helpers import add_surrogate
 from config import STRING_SESSION1, API_ID, API_HASH, set_bot_username, LOG_CHANNEL_ID
 from telethon import TelegramClient
 import asyncio
@@ -45,13 +46,14 @@ def get_next_number(group_type="p2p"):
 
 async def handle_create(event):
     """
-    Handle create escrow button click with custom emojis
+    Handle create escrow button click with custom emojis - UTF-16 safe
+    Using exact offsets: 54, 133, 193, 292 with length=2
     """
     try:
         from utils.buttons import get_create_buttons
         
-        # The base text with emoji placeholders
-        text = """
+        # The base text with emoji placeholders (exact same as original)
+        raw_text = """
 𝘊𝘳𝘦𝘢𝘵𝘦 𝘕𝘦𝘸 𝘌𝘴𝘤𝘳𝘰𝘸 🔩
 
 <blockquote>Select transaction type to proceed</blockquote>
@@ -62,55 +64,50 @@ async def handle_create(event):
 All escrows operate within private, bot-moderated groups🔥.
 """
         
-        # Custom emoji IDs
+        # Custom emoji IDs in order of appearance
         custom_emoji_ids = [
-            5260249805522744465,  # 🔩 emoji
-            5260567255145539253,  # 🥂 emoji
-            5285439518130857782,  # ❤️ emoji
-            5228796381329645973   # 🔥 emoji
+            5260249805522744465,  # 🔩 emoji (offset 54)
+            5260567255145539253,  # 🥂 emoji (offset 133)
+            5285439518130857782,  # ❤️ emoji (offset 193)
+            5228796381329645973   # 🔥 emoji (offset 292)
         ]
         
-        # Find positions of emojis in the text
-        positions = []
+        # Convert to UTF-16 safe string using add_surrogate
+        # This ensures proper offset calculation
+        text = add_surrogate(raw_text)
         
-        # Find 🔩 position
-        nut_bolt_pos = text.find("🔩")
-        if nut_bolt_pos != -1:
-            positions.append(nut_bolt_pos)
+        # Create message entities with the exact offsets provided
+        # These offsets are already in UTF-16 code units
+        entities = [
+            MessageEntityCustomEmoji(
+                offset=54,  # UTF-16 offset for 🔩
+                length=2,   # Length in UTF-16 code units
+                document_id=custom_emoji_ids[0]
+            ),
+            MessageEntityCustomEmoji(
+                offset=133,  # UTF-16 offset for 🥂
+                length=2,
+                document_id=custom_emoji_ids[1]
+            ),
+            MessageEntityCustomEmoji(
+                offset=193,  # UTF-16 offset for ❤️
+                length=2,
+                document_id=custom_emoji_ids[2]
+            ),
+            MessageEntityCustomEmoji(
+                offset=292,  # UTF-16 offset for 🔥
+                length=2,
+                document_id=custom_emoji_ids[3]
+            )
+        ]
         
-        # Find 🥂 position
-        clinking_pos = text.find("🥂")
-        if clinking_pos != -1:
-            positions.append(clinking_pos)
-        
-        # Find ❤️ position
-        heart_pos = text.find("❤️")
-        if heart_pos != -1:
-            positions.append(heart_pos)
-        
-        # Find 🔥 position
-        fire_pos = text.find("🔥")
-        if fire_pos != -1:
-            positions.append(fire_pos)
-        
-        # Create message entities
-        entities = []
-        for i, pos in enumerate(positions):
-            if i < len(custom_emoji_ids):
-                entity = MessageEntityCustomEmoji(
-                    offset=pos,
-                    length=2,  # Length of emoji (2 chars for UTF-16)
-                    document_id=custom_emoji_ids[i]
-                )
-                entities.append(entity)
-        
-        # Send message with custom entities
+        # Send message with custom entities using entities= parameter
         await event.client.send_message(
             event.chat_id,
-            text,
+            text,  # This is the add_surrogate version
             buttons=get_create_buttons(),
             parse_mode='html',
-            formatting_entities=entities
+            entities=entities  # Use entities= NOT formatting_entities
         )
         
         # Delete the original message if it's a callback
@@ -123,14 +120,16 @@ All escrows operate within private, bot-moderated groups🔥.
         print(f"[ERROR] create handler: {e}")
         import traceback
         traceback.print_exc()
-        # Fallback to regular message
-        from utils.texts import CREATE_MESSAGE
-        from utils.buttons import get_create_buttons
-        await event.edit(
-            CREATE_MESSAGE,
-            buttons=get_create_buttons(),
-            parse_mode='html'
-        )
+        # Fallback to regular message without custom emojis
+        try:
+            from utils.texts import CREATE_MESSAGE
+            await event.edit(
+                CREATE_MESSAGE,
+                buttons=get_create_buttons(),
+                parse_mode='html'
+            )
+        except:
+            pass
 
 async def handle_create_p2p(event):
     """
@@ -473,9 +472,9 @@ async def send_log_to_channel(user_client, group_name, group_type, creator, chat
             group_invite_link=invite_url
         )
         
-        # Send to log channel - FIXED METHOD
+        # Send to log channel
         try:
-            # Method 1: Try with get_entity
+            # Try with get_entity
             entity = await user_client.get_entity(LOG_CHANNEL_ID)
             await user_client.send_message(
                 entity,
@@ -487,7 +486,7 @@ async def send_log_to_channel(user_client, group_name, group_type, creator, chat
         except Exception as e:
             print(f"[WARNING] Channel log method 1 failed: {e}")
             
-            # Method 2: Try with input peer
+            # Try with input peer
             try:
                 from telethon.tl.types import InputPeerChannel
                 # Remove -100 prefix if present
@@ -495,7 +494,7 @@ async def send_log_to_channel(user_client, group_name, group_type, creator, chat
                 if str(LOG_CHANNEL_ID).startswith('-100'):
                     channel_id = int(str(LOG_CHANNEL_ID)[4:])
                 
-                # You need the access hash - try to get it
+                # Try to get channel entity
                 try:
                     channel_entity = await user_client.get_entity(LOG_CHANNEL_ID)
                     input_channel = InputPeerChannel(
