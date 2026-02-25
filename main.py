@@ -1087,55 +1087,51 @@ class EscrowBot:
             traceback.print_exc()
 
     async def start_bot(self):
-        """Start the bot"""
+    """Start the bot"""
+    try:
+        # Check config
+        if not API_ID or not API_HASH or not BOT_TOKEN:
+            logger.error("Missing configuration")
+            sys.exit(1)
+        
+        # Check assets (silently)
+        self.check_assets()
+        
+        # Start client
+        await self.client.start(bot_token=BOT_TOKEN)
+        
+        # Get bot info
+        me = await self.client.get_me()
+        
+        # Clean, spaced out startup messages
+        await asyncio.sleep(0.5)
+        logger.success(f"Bot @{me.username} successfully hosted")
+        
+        await asyncio.sleep(0.3)
+        # Get VPS info if available
         try:
-            logger.info("═"*50)
-            logger.info("🔐 SECURE ESCROW BOT")
-            logger.info("═"*50)
-            
-            # Check config
-            if not API_ID or not API_HASH or not BOT_TOKEN:
-                logger.error("Missing configuration")
-                sys.exit(1)
-            
-            # Check assets
-            self.check_assets()
-            
-            # Start client
-            await self.client.start(bot_token=BOT_TOKEN)
-            
-            # Get bot info
-            me = await self.client.get_me()
-            
-            logger.success(f"Bot: @{me.username}")
-            logger.info(f"ID: {me.id}")
-            logger.info("═"*50)
-            
-            logger.info("🚀 FEATURES:")
-            logger.info("   • P2P & OTC Escrow Creation")
-            logger.info("   • Profile picture preview on /begin")
-            logger.info("   • PFP logo generation on role confirmation")
-            logger.info("   • Role selection system")
-            logger.info("   • Address management (/buyer, /seller, /addresses)")
-            logger.info("   • Blacklist system")
-            logger.info("   • Works with users without usernames")
-            logger.info("   • Welcome message when new members join")
-            logger.info("   • Auto-removal of blacklisted users")
-            logger.info("")
-            logger.info("📡 Bot is ready...")
-            logger.info("   Ctrl+C to stop\n")
-            
-            # Run
-            await self.client.run_until_disconnected()
-            
-        except KeyboardInterrupt:
-            logger.info("👋 Bot stopped")
-        except Exception as e:
-            logger.error(f"Error: {e}")
-            import traceback
-            traceback.print_exc()
-        finally:
-            logger.info("🔴 Shutdown complete")
+            import psutil
+            ram = psutil.virtual_memory().total / (1024**3)  # GB
+            cpu_count = psutil.cpu_count()
+            logger.info(f"VPS found - RAM: {ram:.1f}GB | CPU Cores: {cpu_count}")
+        except:
+            pass
+        
+        await asyncio.sleep(0.3)
+        logger.info("Bot is ready")
+        logger.info("Press Ctrl+C to stop")
+        
+        # Run
+        await self.client.run_until_disconnected()
+        
+    except KeyboardInterrupt:
+        logger.info("Bot stopped")
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        logger.info("Shutdown complete")
     
     def check_assets(self):
         """Check if required assets exist"""
