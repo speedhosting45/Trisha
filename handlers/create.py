@@ -158,9 +158,9 @@ async def handle_create_p2p(event):
         
         # Show animation messages
         animation_messages = [
-            f"𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘗2𝘗 𝘌𝘴𝘤𝘳𝘰𝘸\n\nPlease wait {mention}.",
-            f"𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘗2𝘗 𝘌𝘴𝘤𝘳𝘰𝘸\n\nPlease wait {mention}..",
-            f"𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘗2𝘗 𝘌𝘴𝘤𝘳𝘰𝘸\n\nPlease wait {mention}...",
+            f"𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘗2𝘗 𝘌𝘴𝘤𝘳𝘰𝘸\nPlease wait {mention}.",
+            f"𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘗2𝘗 𝘌𝘴𝘤𝘳𝘰𝘸\nPlease wait {mention}..",
+            f"𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘗2𝘗 𝘌𝘴𝘤𝘳𝘰𝘸\nPlease wait {mention}...",
         ]
         
         # Display animation
@@ -406,7 +406,8 @@ Proceed to the group to configure participants and terms ⚖️
             )
 async def handle_create_other(event):
     """
-    Handle OTC deal selection
+    Handle OTC deal selection with premium custom emojis - Proper Telethon way
+    Using html_parse to merge HTML formatting with custom emoji entities
     """
     try:
         # Get user mention
@@ -424,53 +425,99 @@ async def handle_create_other(event):
         group_number = get_next_number("other")
         group_name = f"𝖮𝖳𝖢 𝘌𝘴𝘤𝘳𝘰𝘸 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 • #{group_number:02d}"
         
-        # Show animation messages
+        # Show animation messages (simplified without HTML since we're not using parse_mode yet)
         animation_messages = [
-            f"𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘖𝘛𝘊 𝘌𝘴𝘤𝘳𝘰𝘸\n\n<blockquote>Please wait {mention}.</blockquote>",
-            f"𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘖𝘛𝘊 𝘌𝘴𝘤𝘳𝘰𝘸\n\n<blockquote>Please wait {mention}..</blockquote>",
-            f"𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘖𝘛𝘊 𝘌𝘴𝘤𝘳𝘰𝘸\n\n<blockquote>Please wait {mention}...</blockquote>",
+            f"𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘖𝘛𝘊 𝘌𝘴𝘤𝘳𝘰𝘸\n\nPlease wait {mention}.",
+            f"𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘖𝘛𝘊 𝘌𝘴𝘤𝘳𝘰𝘸\n\nPlease wait {mention}..",
+            f"𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘖𝘛𝘊 𝘌𝘴𝘤𝘳𝘰𝘸\n\nPlease wait {mention}...",
         ]
         
         # Display animation
         for msg in animation_messages:
-            await event.edit(
-                msg,
-                parse_mode='html'
-            )
+            await event.edit(msg)
             await asyncio.sleep(0.5)
         
         # Create group
         result = await create_escrow_group(group_name, bot_username, "other", event.client, user.id)
         
         if result and "invite_url" in result:
-            from utils.texts import OTHER_CREATED_MESSAGE
             from utils.buttons import get_otc_created_buttons
+            from telethon.tl.types import MessageEntityCustomEmoji
+            from telethon.extensions.html import parse as html_parse
             
             # Get buttons
             buttons = get_otc_created_buttons(result["invite_url"])
             
-            # Create message
-            message = OTHER_CREATED_MESSAGE.format(
-                GROUP_NUMBER=group_number,
-                GROUP_INVITE_LINK=result["invite_url"],
-                GROUP_NAME=group_name,
-                OTC_IMAGE=OTC_IMAGE
-            )
+            # HTML formatted text with placeholders
+            html_text = f"""
+<b>𝘊𝘶𝘴𝘵𝘰𝘮 𝘌𝘴𝘤𝘳𝘰𝘸 𝘌𝘴𝘵𝘢𝘣𝘭𝘪𝘴𝘩𝘦𝘥</b> 👍
+
+<blockquote>Multi-party agreement group created</blockquote>
+
+<b>Group:</b> {group_name}
+<b>Type:</b> Custom Agreement 🐳
+<b>Status:</b> Ready for configuration
+
+<code>{result["invite_url"]}</code>
+
+Proceed to the group to define participants and contract terms 🤝
+"""
             
-            # Send final message
+            # Step 1: Parse HTML to get text and HTML entities
+            parsed_text, html_entities = html_parse(html_text)
+            
+            # Custom emoji IDs for OTC message
+            emoji_map = {
+                "👍": 5337080053119336309,   # offset 77
+                "🐳": 5323401020368234707,   # offset 199
+                "🤝": 5242409048246071737,   # offset 339
+            }
+            
+            # Step 2: Build custom emoji entities using parsed_text
+            emoji_entities = []
+            
+            for emoji, doc_id in emoji_map.items():
+                try:
+                    # Find position in parsed text
+                    index = parsed_text.index(emoji)
+                    
+                    # Calculate UTF-16 offset
+                    utf16_offset = len(parsed_text[:index].encode("utf-16-le")) // 2
+                    utf16_length = len(emoji.encode("utf-16-le")) // 2
+                    
+                    emoji_entities.append(
+                        MessageEntityCustomEmoji(
+                            offset=utf16_offset,
+                            length=utf16_length,
+                            document_id=doc_id
+                        )
+                    )
+                    
+                    print(f"[DEBUG] Emoji {emoji} at offset {utf16_offset}, length {utf16_length}")
+                    
+                except ValueError:
+                    print(f"[WARNING] Emoji {emoji} not found in parsed text")
+                    continue
+            
+            # Step 3: Merge both entity lists
+            all_entities = html_entities + emoji_entities
+            all_entities.sort(key=lambda e: e.offset)
+            
+            print(f"[DEBUG] Total entities: {len(all_entities)} (HTML: {len(html_entities)}, Emoji: {len(emoji_entities)})")
+            
+            # Step 4: Send WITHOUT parse_mode
             await event.edit(
-                message,
-                parse_mode='html',
-                link_preview=True,
-                buttons=buttons
+                parsed_text,
+                formatting_entities=all_entities,
+                buttons=buttons,
+                link_preview=True
             )
             
             print(f"[SUCCESS] OTC Escrow created: {group_name}")
             
         else:
             await event.edit(
-                "𝘌𝘴𝘤𝘳𝘰𝘸 𝘊𝘳𝘦𝘢𝘵𝘪𝘰𝘯 𝘍𝘢𝘪𝘭𝘦𝘥\n\n<blockquote>Please try again later</blockquote>",
-                parse_mode='html',
+                "𝘌𝘴𝘤𝘳𝘰𝘸 𝘊𝘳𝘦𝘢𝘵𝘪𝘰𝘯 𝘍𝘢𝘪𝘭𝘦𝘥\n\nPlease try again later",
                 buttons=[Button.inline("🔄 Try Again", b"create")]
             )
             
@@ -478,11 +525,39 @@ async def handle_create_other(event):
         print(f"[ERROR] OTC handler: {e}")
         import traceback
         traceback.print_exc()
-        await event.edit(
-            "𝘌𝘳𝘳𝘰𝘳 𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘌𝘴𝘤𝘳𝘰𝘸\n\n<blockquote>Technical issue detected</blockquote>",
-            parse_mode='html',
-            buttons=[Button.inline("🔄 Try Again", b"create")]
-        )
+        # Fallback to regular message without custom emojis
+        try:
+            from utils.texts import OTHER_CREATED_MESSAGE
+            from utils.buttons import get_otc_created_buttons
+            
+            # Create group again if needed
+            if 'result' not in locals() or not result:
+                result = await create_escrow_group(group_name, bot_username, "other", event.client, user.id)
+            
+            if result and "invite_url" in result:
+                message = OTHER_CREATED_MESSAGE.format(
+                    GROUP_NUMBER=group_number,
+                    GROUP_INVITE_LINK=result["invite_url"],
+                    GROUP_NAME=group_name,
+                    OTC_IMAGE=OTC_IMAGE
+                )
+                await event.edit(
+                    message,
+                    parse_mode='html',
+                    link_preview=True,
+                    buttons=get_otc_created_buttons(result["invite_url"])
+                )
+            else:
+                await event.edit(
+                    "𝘌𝘴𝘤𝘳𝘰𝘸 𝘊𝘳𝘦𝘢𝘵𝘪𝘰𝘯 𝘍𝘢𝘪𝘭𝘦𝘥\n\nPlease try again later",
+                    buttons=[Button.inline("🔄 Try Again", b"create")]
+                )
+        except Exception as fallback_error:
+            print(f"[ERROR] OTC fallback: {fallback_error}")
+            await event.edit(
+                "𝘌𝘳𝘳𝘰𝘳 𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘌𝘴𝘤𝘳𝘰𝘸\n\nTechnical issue detected",
+                buttons=[Button.inline("🔄 Try Again", b"create")]
+            )
 
 async def create_escrow_group(group_name, bot_username, group_type, bot_client, creator_user_id):
     """
