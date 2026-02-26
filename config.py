@@ -17,6 +17,7 @@ BOT_USERNAME = ""
 MONGO_URI = "mongodb+srv://kyurebc:VsUsi43gwToAT3cR@cluster0.p50wsey.mongodb.net/?appName=Cluster0"
 DB_NAME = "OneEscrowUsers"
 LOG_CHANNEL_ID=-1003821511613
+OWNER_ID = 7339063037
 
 # Add these to your config.py file
 
