@@ -6,6 +6,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime, timedelta
 import asyncio
 import time
+import os
 
 logger = get_logger("Trisha.core.broadcast")
 
@@ -48,11 +49,24 @@ async def get_all_users():
         logger.error(f"Error getting users from DB: {e}")
         return []
 
-async def send_broadcast_message(client, user_id, message, file=None, buttons=None):
+async def send_broadcast_message(client, user_id, message, file=None, file_name=None, buttons=None):
     """Send broadcast message to a single user"""
     try:
         if file:
-            await client.send_file(user_id, file, caption=message, parse_mode='html', buttons=buttons)
+            # If it's an image, ensure it has .png extension
+            if file_name and not file_name.endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                file_name = f"{file_name}.png"
+            elif not file_name:
+                file_name = "broadcast_image.png"
+                
+            await client.send_file(
+                user_id, 
+                file, 
+                caption=message, 
+                parse_mode='html', 
+                buttons=buttons,
+                file_name=file_name
+            )
         else:
             await client.send_message(user_id, message, parse_mode='html', buttons=buttons)
         return True, None
@@ -170,30 +184,46 @@ async def update_broadcast_status(event, broadcast_msg, start_time, total_users,
         # Fallback to plain text
         await broadcast_msg.edit(f"Started Broadcasting... ETA: {eta}")
 
-async def log_broadcast_result(client, message_content, total_users, success_count, failed_count, blocked_count, invalid_count, start_time, file_type=None):
-    """Log broadcast results to log channel"""
+async def log_broadcast_result_to_channel(client, completion_text, total_users, success_count, failed_count, start_time, file_type=None):
+    """Log broadcast results to log channel with the same format as completion message"""
     try:
         elapsed = time.time() - start_time
-        elapsed_str = format_eta(elapsed)
+        elapsed_str = format_time_taken(elapsed)
         
-        log_message = f"""<b>📢 Broadcast Completed</b>
-
-<b>Content:</b> <code>{message_content[:100]}{'...' if len(message_content) > 100 else ''}</code>
-<b>File Type:</b> {file_type if file_type else 'Text only'}
-
-<b>📊 Statistics:</b>
-• Total Users Loaded: {total_users}
-• ✅ Success: {success_count}
-• ❌ Failed: {failed_count}
-   - 🚫 Blocked Bot: {blocked_count}
-   - ❓ Invalid Users: {invalid_count}
-
-<b>⏱️ Duration:</b> {elapsed_str}
-<b>🤖 Bot:</b> @{BOT_USERNAME}"""
-
-        await client.send_message(LOG_CHANNEL_ID, log_message, parse_mode='html')
+        # Format the log message exactly like the completion message
+        log_text = f"Broadcast Completed. ✌️\nSuccessfully Broadcasted To {success_count} users. And Failed To Broadcast {failed_count} users. 📰\nTime Taken : {elapsed_str}"
+        
+        # Map emojis for log message
+        log_emoji_map = {
+            "✌️": 5273802055134229167,
+            "📰": 5257952710983955418
+        }
+        
+        # Define bold ranges (character indices)
+        bold_ranges = [
+            (log_text.find(f"Broadcast Completed"), len("Broadcast Completed")),
+            (log_text.find(f"Successfully Broadcasted To {success_count}"), len(f"Successfully Broadcasted To {success_count}")),
+            (log_text.find(f"Failed To Broadcast {failed_count}"), len(f"Failed To Broadcast {failed_count}")),
+            (log_text.find(f"Time Taken"), len("Time Taken"))
+        ]
+        
+        # Build entities
+        log_entities = build_custom_entities(
+            log_text,
+            emoji_map=log_emoji_map,
+            bold_ranges=bold_ranges
+        )
+        
+        # Send to log channel
+        await client.send_message(
+            LOG_CHANNEL_ID,
+            log_text,
+            formatting_entities=log_entities
+        )
+        
+        logger.info(f"Broadcast result logged to channel")
     except Exception as e:
-        logger.error(f"Error logging broadcast result: {e}")
+        logger.error(f"Error logging broadcast result to channel: {e}")
 
 @events.register(events.NewMessage(pattern='/broadcast'))
 async def handle_broadcast(event):
@@ -221,6 +251,7 @@ async def handle_broadcast(event):
         # Get broadcast content
         message_text = None
         file = None
+        file_name = None
         
         if event.is_reply:
             # If replying to a message, get that message's content
@@ -228,7 +259,18 @@ async def handle_broadcast(event):
             message_text = replied.text or replied.message or ""
             if replied.media:
                 file = await replied.download_media(file=bytes)
-                logger.info(f"Broadcasting media file")
+                # Set proper filename for image
+                if replied.file and replied.file.name:
+                    file_name = replied.file.name
+                else:
+                    # Generate filename based on media type
+                    if replied.photo:
+                        file_name = f"broadcast_image_{int(time.time())}.png"
+                    elif replied.document:
+                        file_name = replied.document.attributes[0].file_name if replied.document.attributes else f"broadcast_file_{int(time.time())}"
+                    else:
+                        file_name = f"broadcast_media_{int(time.time())}"
+                logger.info(f"Broadcasting media file as: {file_name}")
         else:
             # Get text from command
             message_text = event.message.text.replace('/broadcast', '', 1).strip()
@@ -245,12 +287,12 @@ async def handle_broadcast(event):
             "🔥": 6026036220927151662
         }
         
-        # Build entities for start message (no bold needed)
+        # Build entities for start message
         start_entities = build_custom_entities(start_text, emoji_map=start_emoji_map)
         
-        # Send initial status
+        # Send initial status (reply to the original command)
         start_time = time.time()
-        broadcast_msg = await event.respond(
+        broadcast_msg = await event.reply(
             start_text,
             formatting_entities=start_entities
         )
@@ -266,7 +308,13 @@ async def handle_broadcast(event):
         logger.info(f"Broadcasting to {total_users} users...")
         for user_id in users:
             try:
-                success, reason = await send_broadcast_message(event.client, user_id, message_text, file)
+                success, reason = await send_broadcast_message(
+                    event.client, 
+                    user_id, 
+                    message_text, 
+                    file,
+                    file_name
+                )
                 
                 if success:
                     success_count += 1
@@ -312,7 +360,7 @@ async def handle_broadcast(event):
             "📰": 5257952710983955418
         }
         
-        # Define bold ranges (character indices) - making the stats bold
+        # Define bold ranges (character indices)
         bold_ranges = [
             (completion_text.find(f"Broadcast Completed"), len("Broadcast Completed")),
             (completion_text.find(f"Successfully Broadcasted To {success_count}"), len(f"Successfully Broadcasted To {success_count}")),
@@ -320,30 +368,24 @@ async def handle_broadcast(event):
             (completion_text.find(f"Time Taken"), len("Time Taken"))
         ]
         
-        # Build completion entities with both emojis and bold
+        # Build completion entities
         completion_entities = build_custom_entities(
             completion_text, 
             emoji_map=completion_emoji_map,
             bold_ranges=bold_ranges
         )
         
-        # Send completion message
-        await event.respond(completion_text, formatting_entities=completion_entities)
+        # Send completion message (reply to the original command)
+        await event.reply(completion_text, formatting_entities=completion_entities)
         
-        # Log results to log channel
-        file_type = None
-        if file:
-            if isinstance(file, bytes):
-                file_type = "Document/Media"
-        
-        await log_broadcast_result(
-            event.client, message_text, total_users, 
-            success_count, failed_count, blocked_count, 
-            invalid_count, start_time, file_type
+        # Log the same message to the channel
+        await log_broadcast_result_to_channel(
+            event.client, completion_text, total_users,
+            success_count, failed_count, start_time
         )
         
         logger.info(f"Broadcast completed: {success_count} success, {failed_count} failed")
         
     except Exception as e:
         logger.error(f"Error in broadcast handler: {e}")
-        await event.respond(f"❌ Error during broadcast: {str(e)[:100]}")
+        await event.reply(f"❌ Error during broadcast: {str(e)[:100]}")
