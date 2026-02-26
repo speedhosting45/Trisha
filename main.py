@@ -26,6 +26,7 @@ from handlers.stats import handle_stats
 from handlers.about import handle_about
 from handlers.help import handle_help
 from handlers.addresses import setup_address_handlers
+from handlers.broadcast import handle_broadcast
 
 # Import utilities
 from utils.texts import (
@@ -401,6 +402,10 @@ class EscrowBot:
         @self.client.on(events.CallbackQuery(pattern=b'create_other'))
         async def create_other_handler(event):
             await handle_create_other(event)
+       
+        @self.client.on(events.NewMessage(pattern='/broadcast'))
+        async def broadcast_handler(event):
+            await handle_broadcast(event)
         
         @self.client.on(events.CallbackQuery(pattern=b'stats'))
         async def stats_handler(event):
