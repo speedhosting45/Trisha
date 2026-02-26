@@ -28,15 +28,6 @@ async def get_db():
         logger.error(f"MongoDB connection failed: {e}")
         return None
 
-# Owner only decorator
-def owner_only(func):
-    async def wrapper(event, *args, **kwargs):
-        if event.sender_id != OWNER_ID:
-            await event.respond("❌ This command is only for bot owner.")
-            return
-        return await func(event, *args, **kwargs)
-    return wrapper
-
 async def get_all_users():
     """Get all user IDs from database"""
     try:
@@ -161,12 +152,18 @@ def create_completion_entities():
         MessageEntityCustomEmoji(offset=167, length=2, custom_emoji_id="5257952710983955418")
     ]
 
+@events.register(events.NewMessage(pattern='/broadcast'))
 async def handle_broadcast(event):
     """
     Handle /broadcast command - Only owner can use
     Usage: /broadcast <message> or reply to a message with /broadcast
     """
     try:
+        # Owner check at the very top
+        if event.sender_id != OWNER_ID:
+            await event.respond("❌ This command is only for bot owner.")
+            return
+        
         # Get all users from database
         logger.info("Fetching users from OneEscrowUsers collection...")
         users = await get_all_users()
@@ -269,9 +266,3 @@ async def handle_broadcast(event):
     except Exception as e:
         logger.error(f"Error in broadcast handler: {e}")
         await event.respond(f"❌ Error during broadcast: {str(e)[:100]}")
-
-# Register the handler with owner_only decorator
-@events.register(events.NewMessage(pattern='/broadcast'))
-async def broadcast_handler(event):
-    """Broadcast handler with owner check"""
-    return await owner_only(handle_broadcast)(event)
