@@ -704,8 +704,88 @@ Link : {invite_url}
 𝖢𝗋𝖾𝖺𝗍𝖾𝖽 𝖡𝗒 : {mention} 🟢
 𝖴𝗌𝖾𝗋 𝖨𝖣 : {creator_user_id} ➖"""
 
-        # Build entities for log message
-        entities = build_log_entities(log_text)
+        # Build entities for log message with DYNAMIC offsets
+        entities = []
+        
+        # 1. Hashtag entity for first line
+        hashtag_text = "#𝖭𝖾𝗐 𝖤𝗌𝖼𝗋𝗈𝗐 𝖦𝗋𝗈𝗎𝗉 𝖢𝗋𝖾𝖺𝗍𝖾𝖽 & 𝖲𝖺𝗏𝖾𝖽."
+        idx = log_text.find(hashtag_text)
+        if idx != -1:
+            prefix = log_text[:idx]
+            utf16_offset = len(prefix.encode('utf-16-le')) // 2
+            utf16_length = len(hashtag_text.encode('utf-16-le')) // 2
+            entities.append(MessageEntityHashtag(offset=utf16_offset, length=utf16_length))
+            print(f"[DEBUG] Hashtag at offset {utf16_offset}, length {utf16_length}")
+        
+        # 2. Custom emoji for 💸 (after Deal Type)
+        idx = log_text.find("💸")
+        if idx != -1:
+            prefix = log_text[:idx]
+            utf16_offset = len(prefix.encode('utf-16-le')) // 2
+            utf16_length = len("💸".encode('utf-16-le')) // 2
+            entities.append(MessageEntityCustomEmoji(
+                offset=utf16_offset,
+                length=utf16_length,
+                document_id=6082586710988820084
+            ))
+            print(f"[DEBUG] 💸 at offset {utf16_offset}")
+        
+        # 3. Custom emoji for 🔗 (after Name)
+        idx = log_text.find("🔗")
+        if idx != -1:
+            prefix = log_text[:idx]
+            utf16_offset = len(prefix.encode('utf-16-le')) // 2
+            utf16_length = len("🔗".encode('utf-16-le')) // 2
+            entities.append(MessageEntityCustomEmoji(
+                offset=utf16_offset,
+                length=utf16_length,
+                document_id=5271604874419647061
+            ))
+            print(f"[DEBUG] 🔗 at offset {utf16_offset}")
+        
+        # 4. Custom emoji for 🥂 (after Chat ID)
+        idx = log_text.find("🥂")
+        if idx != -1:
+            prefix = log_text[:idx]
+            utf16_offset = len(prefix.encode('utf-16-le')) // 2
+            utf16_length = len("🥂".encode('utf-16-le')) // 2
+            entities.append(MessageEntityCustomEmoji(
+                offset=utf16_offset,
+                length=utf16_length,
+                document_id=5260567255145539253
+            ))
+            print(f"[DEBUG] 🥂 at offset {utf16_offset}")
+        
+        # 5. Custom emoji for 🟢 (after Created By)
+        idx = log_text.find("🟢")
+        if idx != -1:
+            prefix = log_text[:idx]
+            utf16_offset = len(prefix.encode('utf-16-le')) // 2
+            utf16_length = len("🟢".encode('utf-16-le')) // 2
+            entities.append(MessageEntityCustomEmoji(
+                offset=utf16_offset,
+                length=utf16_length,
+                document_id=6298751564592973547
+            ))
+            print(f"[DEBUG] 🟢 at offset {utf16_offset}")
+        
+        # 6. Custom emoji for ➖ (after User ID)
+        idx = log_text.find("➖")
+        if idx != -1:
+            prefix = log_text[:idx]
+            utf16_offset = len(prefix.encode('utf-16-le')) // 2
+            utf16_length = len("➖".encode('utf-16-le')) // 2
+            entities.append(MessageEntityCustomEmoji(
+                offset=utf16_offset,
+                length=utf16_length,
+                document_id=6024110293167116639
+            ))
+            print(f"[DEBUG] ➖ at offset {utf16_offset}")
+        
+        # Sort entities by offset
+        entities.sort(key=lambda e: e.offset)
+        
+        print(f"[DEBUG] Total entities created: {len(entities)}")
         
         # Send to log channel using the BOT client
         try:
@@ -714,10 +794,10 @@ Link : {invite_url}
                 log_text,
                 formatting_entities=entities
             )
-            print(f"[LOG] Sent to channel using BOT with premium emojis")
+            print(f"[SUCCESS] Log sent to channel with {len(entities)} premium emojis")
             
         except Exception as e:
-            print(f"[ERROR] Bot failed to send log: {e}")
+            print(f"[ERROR] Bot failed to send log with entities: {e}")
             
             # Fallback: try to send without entities
             try:
@@ -731,6 +811,8 @@ Link : {invite_url}
         
     except Exception as e:
         print(f"[ERROR] Preparing log: {e}")
+        import traceback
+        traceback.print_exc()
 
 def store_group_data(group_id, group_name, group_type, creator_id, bot_username, creator_username, creator_user_id):
     """Store group data"""
