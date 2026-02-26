@@ -1,6 +1,6 @@
 from telethon import events
 from telethon.tl.types import MessageEntityBold, MessageEntityCustomEmoji
-from config import OWNER_ID, LOG_CHANNEL_ID, BOT_USERNAME
+from config import OWNER_ID, LOG_CHANNEL_ID, BOT_USERNAME, MONGO_URI, DB_NAME
 from core.logger import get_logger
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime, timedelta
@@ -9,8 +9,24 @@ import time
 
 logger = get_logger("Trisha.core.broadcast")
 
-# MongoDB connection (reuse from start.py)
-from handlers.start import get_db, get_total_users
+# MongoDB connection
+_mongo_client = None
+_db = None
+
+async def get_db():
+    """Get MongoDB database instance"""
+    global _mongo_client, _db
+    try:
+        if _mongo_client is None:
+            _mongo_client = AsyncIOMotorClient(MONGO_URI)
+            _db = _mongo_client[DB_NAME]
+            # Test connection
+            await _db.command('ping')
+            logger.success("MongoDB connected successfully")
+        return _db
+    except Exception as e:
+        logger.error(f"MongoDB connection failed: {e}")
+        return None
 
 # Owner only decorator
 def owner_only(func):
@@ -26,11 +42,16 @@ async def get_all_users():
     try:
         db = await get_db()
         if db is None:
+            logger.error("Database connection failed")
             return []
-        users_collection = db["users"]
+        
+        users_collection = db["OneEscrowUsers"]  # Using OneEscrowUsers collection
         cursor = users_collection.find({}, {"user_id": 1})
         users = await cursor.to_list(length=None)
-        return [user["user_id"] for user in users]
+        user_ids = [user["user_id"] for user in users]
+        
+        logger.info(f"Loaded {len(user_ids)} users from OneEscrowUsers collection")
+        return user_ids
     except Exception as e:
         logger.error(f"Error getting users from DB: {e}")
         return []
@@ -106,7 +127,7 @@ async def log_broadcast_result(client, message_content, total_users, success_cou
 <b>File Type:</b> {file_type if file_type else 'Text only'}
 
 <b>📊 Statistics:</b>
-• Total Users: {total_users}
+• Total Users Loaded: {total_users}
 • ✅ Success: {success_count}
 • ❌ Failed: {failed_count}
    - 🚫 Blocked Bot: {blocked_count}
@@ -147,12 +168,15 @@ async def handle_broadcast(event):
     """
     try:
         # Get all users from database
+        logger.info("Fetching users from OneEscrowUsers collection...")
         users = await get_all_users()
+        
         if not users:
-            await event.respond("❌ No users found in database.")
+            await event.respond("❌ No users found in OneEscrowUsers collection.")
             return
         
         total_users = len(users)
+        logger.info(f"Starting broadcast to {total_users} users")
         
         # Get broadcast content
         message_text = None
@@ -164,6 +188,7 @@ async def handle_broadcast(event):
             message_text = replied.text or replied.message or ""
             if replied.media:
                 file = await replied.download_media(file=bytes)
+                logger.info(f"Broadcasting media file")
         else:
             # Get text from command
             message_text = event.message.text.replace('/broadcast', '', 1).strip()
@@ -186,6 +211,7 @@ async def handle_broadcast(event):
         processed = 0
         
         # Send broadcast to all users
+        logger.info(f"Broadcasting to {total_users} users...")
         for user_id in users:
             try:
                 success, reason = await send_broadcast_message(event.client, user_id, message_text, file)
@@ -237,6 +263,8 @@ async def handle_broadcast(event):
             success_count, failed_count, blocked_count, 
             invalid_count, start_time, file_type
         )
+        
+        logger.info(f"Broadcast completed: {success_count} success, {failed_count} failed")
         
     except Exception as e:
         logger.error(f"Error in broadcast handler: {e}")
