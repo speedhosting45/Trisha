@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Create escrow handlers - Fixed version with Premium Custom Emojis (UTF-16 safe)
+Logs sent from bot, not session string
 """
 from telethon.sessions import StringSession
 from telethon.tl import functions, types
@@ -15,7 +16,7 @@ from telethon.tl.types import (
     MessageEntityHashtag
 )
 from telethon.helpers import add_surrogate
-from config import STRING_SESSION1, API_ID, API_HASH, set_bot_username, LOG_CHANNEL_ID
+from config import STRING_SESSION1, API_ID, API_HASH, set_bot_username, LOG_CHANNEL_ID, BOT_TOKEN
 from telethon import TelegramClient
 import asyncio
 import json
@@ -49,20 +50,19 @@ def get_next_number(group_type="p2p"):
         print(f"[ERROR] get_next_number: {e}")
         return 1
 
-def build_log_entities(text, group_type):
+def build_log_entities(text):
     """
     Build custom entities for log message with correct UTF-16 offsets
     
     Args:
         text: Full message string
-        group_type: "p2p" or "other" (otc)
     
     Returns:
         List of MessageEntity objects with correct offsets
     """
     entities = []
     
-    # Add hashtag entity for "#𝖭𝖾𝗐 𝖤𝗌𝖼𝗋𝗈𝗐 𝖦𝗋𝗈𝗎𝗉 𝖢𝗋𝖾𝖺𝗍𝖾𝖽 & 𝖲𝖺𝗏𝖾𝖽."
+    # Add hashtag entity for the first line
     hashtag_text = "#𝖭𝖾𝗐 𝖤𝗌𝖼𝗋𝗈𝗐 𝖦𝗋𝗈𝗎𝗉 𝖢𝗋𝖾𝖺𝗍𝖾𝖽 & 𝖲𝖺𝗏𝖾𝖽."
     index = text.find(hashtag_text)
     if index != -1:
@@ -245,20 +245,21 @@ async def handle_create_p2p(event):
         group_number = get_next_number("p2p")
         group_name = f"𝖯2𝖯 𝘌𝘴𝘤𝘳𝘰𝘸 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 • #{group_number:02d}"
         
-        # Show animation messages with bold formatting
+        # Show animation messages with bold formatting using entities
         animation_messages = [
-            f"<b>Creating P2P Escrow</b>\nPlease wait {mention}.",
-            f"<b>Creating P2P Escrow</b>\nPlease wait {mention}..",
-            f"<b>Creating P2P Escrow</b>\nPlease wait {mention}...",
+            f"Creating P2P Escrow\nPlease wait {mention}.",
+            f"Creating P2P Escrow\nPlease wait {mention}..",
+            f"Creating P2P Escrow\nPlease wait {mention}...",
         ]
         
-        # Display animation with HTML parsing
+        # Display animation with bold entities
         for msg in animation_messages:
-            await event.edit(msg, parse_mode='html')
+            entities = build_bold_entities(msg)
+            await event.edit(msg, formatting_entities=entities)
             await asyncio.sleep(0.5)
         
         # Create group
-        result = await create_escrow_group(group_name, bot_username, "p2p", event.client, user.id, mention)
+        result = await create_escrow_group(group_name, bot_username, "p2p", event.client, user.id, mention, event)
         
         if result and "invite_url" in result:
             from utils.buttons import get_p2p_created_buttons
@@ -353,7 +354,7 @@ Proceed to the group to configure participants and terms ⚖️
             
             # Create group again if needed
             if 'result' not in locals() or not result:
-                result = await create_escrow_group(group_name, bot_username, "p2p", event.client, user.id, mention)
+                result = await create_escrow_group(group_name, bot_username, "p2p", event.client, user.id, mention, event)
             
             if result and "invite_url" in result:
                 message = P2P_CREATED_MESSAGE.format(
@@ -401,20 +402,21 @@ async def handle_create_other(event):
         group_number = get_next_number("other")
         group_name = f"𝖮𝖳𝖢 𝘌𝘴𝘤𝘳𝘰𝘸 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 • #{group_number:02d}"
         
-        # Show animation messages with bold formatting
+        # Show animation messages with bold formatting using entities
         animation_messages = [
-            f"<b>Creating OTC Escrow</b>\nPlease wait {mention}.",
-            f"<b>Creating OTC Escrow</b>\nPlease wait {mention}..",
-            f"<b>Creating OTC Escrow</b>\nPlease wait {mention}...",
+            f"Creating OTC Escrow\nPlease wait {mention}.",
+            f"Creating OTC Escrow\nPlease wait {mention}..",
+            f"Creating OTC Escrow\nPlease wait {mention}...",
         ]
         
-        # Display animation with HTML parsing
+        # Display animation with bold entities
         for msg in animation_messages:
-            await event.edit(msg, parse_mode='html')
+            entities = build_bold_entities(msg)
+            await event.edit(msg, formatting_entities=entities)
             await asyncio.sleep(0.5)
         
         # Create group
-        result = await create_escrow_group(group_name, bot_username, "other", event.client, user.id, mention)
+        result = await create_escrow_group(group_name, bot_username, "other", event.client, user.id, mention, event)
         
         if result and "invite_url" in result:
             from utils.buttons import get_otc_created_buttons
@@ -444,9 +446,9 @@ Proceed to the group to define participants and contract terms 🤝
             
             # Custom emoji IDs for OTC message
             emoji_map = {
-                "👍": 5337080053119336309,   # offset 77
-                "🐳": 5323401020368234707,   # offset 199
-                "🤝": 5242409048246071737,   # offset 339
+                "👍": 5337080053119336309,
+                "🐳": 5323401020368234707,
+                "🤝": 5242409048246071737,
             }
             
             # Step 2: Build custom emoji entities using parsed_text
@@ -508,7 +510,7 @@ Proceed to the group to define participants and contract terms 🤝
             
             # Create group again if needed
             if 'result' not in locals() or not result:
-                result = await create_escrow_group(group_name, bot_username, "other", event.client, user.id, mention)
+                result = await create_escrow_group(group_name, bot_username, "other", event.client, user.id, mention, event)
             
             if result and "invite_url" in result:
                 message = OTHER_CREATED_MESSAGE.format(
@@ -535,7 +537,7 @@ Proceed to the group to define participants and contract terms 🤝
                 buttons=[Button.inline("🔄 Try Again", b"create")]
             )
 
-async def create_escrow_group(group_name, bot_username, group_type, bot_client, creator_user_id, mention):
+async def create_escrow_group(group_name, bot_username, group_type, bot_client, creator_user_id, mention, event):
     """
     Create a supergroup
     """
@@ -654,11 +656,11 @@ async def create_escrow_group(group_name, bot_username, group_type, bot_client, 
         # Store group data
         store_group_data(chat_id, group_name, group_type, creator.id, bot_username, creator_name, creator_user_id)
         
-        # Send log to channel with premium emojis
+        # Send log to channel using BOT (not session string)
         try:
-            await send_log_to_channel(user_client, group_name, group_type, creator, chat_id, invite_url, creator_user_id, mention)
+            await send_log_to_channel_bot(event.client, group_name, group_type, creator, chat_id, invite_url, creator_user_id, mention)
         except Exception as log_error:
-            print(f"[WARNING] Log failed: {log_error}")
+            print(f"[WARNING] Bot log failed: {log_error}")
             # Continue even if log fails
         
         return {
@@ -683,8 +685,8 @@ async def create_escrow_group(group_name, bot_username, group_type, bot_client, 
             await user_client.disconnect()
             print("[INFO] User client disconnected")
 
-async def send_log_to_channel(user_client, group_name, group_type, creator, chat_id, invite_url, creator_user_id, mention):
-    """Send creation log to channel with exact format"""
+async def send_log_to_channel_bot(bot_client, group_name, group_type, creator, chat_id, invite_url, creator_user_id, mention):
+    """Send creation log to channel using BOT (not session string) with premium emojis"""
     try:
         # Format the log message exactly as requested
         group_type_display = "#𝗉2𝗉" if group_type == "p2p" else "#𝗈𝗍𝖼"
@@ -703,43 +705,29 @@ Link : {invite_url}
 𝖴𝗌𝖾𝗋 𝖨𝖣 : {creator_user_id} ➖"""
 
         # Build entities for log message
-        entities = build_log_entities(log_text, group_type)
+        entities = build_log_entities(log_text)
         
-        # Send to log channel with entities
+        # Send to log channel using the BOT client
         try:
-            # Try with get_entity
-            entity = await user_client.get_entity(LOG_CHANNEL_ID)
-            await user_client.send_message(
-                entity,
+            await bot_client.send_message(
+                LOG_CHANNEL_ID,
                 log_text,
                 formatting_entities=entities
             )
-            print(f"[LOG] Sent to channel with premium emojis")
+            print(f"[LOG] Sent to channel using BOT with premium emojis")
             
         except Exception as e:
-            print(f"[WARNING] Channel log method 1 failed: {e}")
+            print(f"[ERROR] Bot failed to send log: {e}")
             
-            # Try with input peer
+            # Fallback: try to send without entities
             try:
-                from telethon.tl.types import InputPeerChannel
-                # Try to get channel entity
-                try:
-                    channel_entity = await user_client.get_entity(LOG_CHANNEL_ID)
-                    input_channel = InputPeerChannel(
-                        channel_id=channel_entity.id,
-                        access_hash=channel_entity.access_hash
-                    )
-                    await user_client.send_message(
-                        input_channel,
-                        log_text,
-                        formatting_entities=entities
-                    )
-                    print(f"[LOG] Sent via InputPeerChannel")
-                except:
-                    print(f"[WARNING] Could not get channel access hash")
-                    
+                await bot_client.send_message(
+                    LOG_CHANNEL_ID,
+                    log_text
+                )
+                print(f"[LOG] Sent to channel using BOT (plain text)")
             except Exception as e2:
-                print(f"[ERROR] Channel log all methods failed: {e2}")
+                print(f"[ERROR] Bot fallback also failed: {e2}")
         
     except Exception as e:
         print(f"[ERROR] Preparing log: {e}")
