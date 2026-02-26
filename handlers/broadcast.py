@@ -136,21 +136,21 @@ def create_start_entities():
     """Create custom entities for the broadcast start message"""
     return [
         MessageEntityBold(offset=0, length=2),
-        MessageEntityCustomEmoji(offset=0, length=2, custom_emoji_id="5258332798409783582"),
+        MessageEntityCustomEmoji(offset=0, length=2, document_id=5258332798409783582),
         MessageEntityBold(offset=2, length=121),
         MessageEntityBold(offset=124, length=1),
         MessageEntityBold(offset=125, length=1),
-        MessageEntityCustomEmoji(offset=125, length=1, custom_emoji_id="6026036220927151662"),
+        MessageEntityCustomEmoji(offset=125, length=1, document_id=6026036220927151662),
         MessageEntityBold(offset=126, length=20),
         MessageEntityBold(offset=146, length=2),
-        MessageEntityCustomEmoji(offset=146, length=2, custom_emoji_id="5228796381329645973")
+        MessageEntityCustomEmoji(offset=146, length=2, document_id=5228796381329645973)
     ]
 
 def create_completion_entities():
     """Create custom entities for the broadcast completion message"""
     return [
-        MessageEntityCustomEmoji(offset=39, length=2, custom_emoji_id="5273802055134229167"),
-        MessageEntityCustomEmoji(offset=167, length=2, custom_emoji_id="5257952710983955418")
+        MessageEntityCustomEmoji(offset=39, length=2, document_id=5273802055134229167),
+        MessageEntityCustomEmoji(offset=167, length=2, document_id=5257952710983955418)
     ]
 
 @events.register(events.NewMessage(pattern='/broadcast'))
