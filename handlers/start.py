@@ -42,7 +42,7 @@ async def get_total_users():
     """Get total users count from database"""
     try:
         db = await get_db()
-        if not db:
+        if db is None:  # Fix: Compare with None instead of truth value
             return 0
         users_collection = db["users"]
         return await users_collection.count_documents({})
@@ -54,7 +54,8 @@ async def save_user_to_db(user):
     """Save or update user in database"""
     try:
         db = await get_db()
-        if not db:
+        if db is None:  # Fix: Compare with None instead of truth value
+            logger.error("Database is None, cannot save user")
             return False, False
             
         users_collection = db["users"]
@@ -79,11 +80,13 @@ async def save_user_to_db(user):
         if is_new:
             user_data["first_seen"] = datetime.utcnow()
             await users_collection.insert_one(user_data)
+            logger.info(f"New user saved to DB: {user.id}")
         else:
             await users_collection.update_one(
                 {"user_id": user.id},
                 {"$set": user_data}
             )
+            logger.info(f"User updated in DB: {user.id}")
         
         return True, is_new
     except Exception as e:
@@ -138,6 +141,8 @@ async def handle_start(event):
             # Log to channel
             await log_to_channel(event, user, is_new)
             logger.info(f"User {'new' if is_new else 'returning'}: {user.id} (@{user.username})")
+        else:
+            logger.warning(f"Failed to save user to DB: {user.id}")
         
         # Send start message
         await event.respond(
