@@ -11,7 +11,8 @@ from telethon.tl.types import (
     MessageEntityBold,
     MessageEntityBlockquote,
     MessageEntityCode,
-    MessageEntityUrl
+    MessageEntityUrl,
+    MessageEntityHashtag
 )
 from telethon.helpers import add_surrogate
 from config import STRING_SESSION1, API_ID, API_HASH, set_bot_username, LOG_CHANNEL_ID
@@ -47,6 +48,94 @@ def get_next_number(group_type="p2p"):
     except Exception as e:
         print(f"[ERROR] get_next_number: {e}")
         return 1
+
+def build_log_entities(text, group_type):
+    """
+    Build custom entities for log message with correct UTF-16 offsets
+    
+    Args:
+        text: Full message string
+        group_type: "p2p" or "other" (otc)
+    
+    Returns:
+        List of MessageEntity objects with correct offsets
+    """
+    entities = []
+    
+    # Add hashtag entity for "#𝖭𝖾𝗐 𝖤𝗌𝖼𝗋𝗈𝗐 𝖦𝗋𝗈𝗎𝗉 𝖢𝗋𝖾𝖺𝗍𝖾𝖽 & 𝖲𝖺𝗏𝖾𝖽."
+    hashtag_text = "#𝖭𝖾𝗐 𝖤𝗌𝖼𝗋𝗈𝗐 𝖦𝗋𝗈𝗎𝗉 𝖢𝗋𝖾𝖺𝗍𝖾𝖽 & 𝖲𝖺𝗏𝖾𝖽."
+    index = text.find(hashtag_text)
+    if index != -1:
+        utf16_offset = len(text[:index].encode('utf-16-le')) // 2
+        utf16_length = len(hashtag_text.encode('utf-16-le')) // 2
+        entities.append(MessageEntityHashtag(offset=utf16_offset, length=utf16_length))
+    
+    # Emoji map with their document IDs
+    emoji_map = {
+        "💸": 6082586710988820084,  # After Deal Type
+        "🔗": 5271604874419647061,  # After Name
+        "🥂": 5260567255145539253,  # After Chat ID
+        "🟢": 6298751564592973547,  # After Created By
+        "➖": 6024110293167116639   # After User ID
+    }
+    
+    # Add custom emoji entities
+    for emoji, doc_id in emoji_map.items():
+        start = 0
+        while True:
+            try:
+                index = text.index(emoji, start)
+                
+                # Calculate UTF-16 offset
+                prefix = text[:index]
+                utf16_offset = len(prefix.encode('utf-16-le')) // 2
+                utf16_length = len(emoji.encode('utf-16-le')) // 2
+                
+                entities.append(
+                    MessageEntityCustomEmoji(
+                        offset=utf16_offset,
+                        length=utf16_length,
+                        document_id=doc_id
+                    )
+                )
+                
+                start = index + len(emoji)
+                
+            except ValueError:
+                break
+    
+    # Sort entities by offset
+    return sorted(entities, key=lambda e: e.offset)
+
+def build_bold_entities(text):
+    """
+    Build bold entities for animation messages
+    
+    Args:
+        text: Message text
+    
+    Returns:
+        List of MessageEntityBold objects
+    """
+    entities = []
+    
+    # Find the part to make bold (everything after "Creating" until newline)
+    if "Creating" in text:
+        start_idx = text.find("Creating")
+        end_idx = text.find("\n", start_idx)
+        if end_idx == -1:
+            end_idx = len(text)
+        
+        bold_text = text[start_idx:end_idx]
+        
+        # Calculate UTF-16 offset
+        prefix = text[:start_idx]
+        utf16_offset = len(prefix.encode('utf-16-le')) // 2
+        utf16_length = len(bold_text.encode('utf-16-le')) // 2
+        
+        entities.append(MessageEntityBold(offset=utf16_offset, length=utf16_length))
+    
+    return entities
 
 async def handle_create(event):
     """
@@ -156,20 +245,20 @@ async def handle_create_p2p(event):
         group_number = get_next_number("p2p")
         group_name = f"𝖯2𝖯 𝘌𝘴𝘤𝘳𝘰𝘸 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 • #{group_number:02d}"
         
-        # Show animation messages
+        # Show animation messages with bold formatting
         animation_messages = [
-            f"𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘗2𝘗 𝘌𝘴𝘤𝘳𝘰𝘸\nPlease wait {mention}.",
-            f"𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘗2𝘗 𝘌𝘴𝘤𝘳𝘰𝘸\nPlease wait {mention}..",
-            f"𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘗2𝘗 𝘌𝘴𝘤𝘳𝘰𝘸\nPlease wait {mention}...",
+            f"<b>Creating P2P Escrow</b>\nPlease wait {mention}.",
+            f"<b>Creating P2P Escrow</b>\nPlease wait {mention}..",
+            f"<b>Creating P2P Escrow</b>\nPlease wait {mention}...",
         ]
         
-        # Display animation
+        # Display animation with HTML parsing
         for msg in animation_messages:
-            await event.edit(msg)
+            await event.edit(msg, parse_mode='html')
             await asyncio.sleep(0.5)
         
         # Create group
-        result = await create_escrow_group(group_name, bot_username, "p2p", event.client, user.id)
+        result = await create_escrow_group(group_name, bot_username, "p2p", event.client, user.id, mention)
         
         if result and "invite_url" in result:
             from utils.buttons import get_p2p_created_buttons
@@ -210,7 +299,7 @@ Proceed to the group to configure participants and terms ⚖️
             
             for emoji, doc_id in emoji_map.items():
                 try:
-                    # Find position in parsed text (which may have different offsets than raw HTML)
+                    # Find position in parsed text
                     index = parsed_text.index(emoji)
                     
                     # Calculate UTF-16 offset
@@ -264,7 +353,7 @@ Proceed to the group to configure participants and terms ⚖️
             
             # Create group again if needed
             if 'result' not in locals() or not result:
-                result = await create_escrow_group(group_name, bot_username, "p2p", event.client, user.id)
+                result = await create_escrow_group(group_name, bot_username, "p2p", event.client, user.id, mention)
             
             if result and "invite_url" in result:
                 message = P2P_CREATED_MESSAGE.format(
@@ -290,120 +379,7 @@ Proceed to the group to configure participants and terms ⚖️
                 "𝘌𝘳𝘳𝘰𝘳 𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘌𝘴𝘤𝘳𝘰𝘸\n\nTechnical issue detected",
                 buttons=[Button.inline("🔄 Try Again", b"create")]
             )
-            
-    except Exception as e:
-        print(f"[ERROR] P2P handler: {e}")
-        import traceback
-        traceback.print_exc()
-        # Fallback to regular message without custom emojis
-        try:
-            from utils.texts import P2P_CREATED_MESSAGE
-            from utils.buttons import get_p2p_created_buttons
-            
-            # Create group again if needed
-            if 'result' not in locals() or not result:
-                result = await create_escrow_group(group_name, bot_username, "p2p", event.client, user.id)
-            
-            if result and "invite_url" in result:
-                message = P2P_CREATED_MESSAGE.format(
-                    GROUP_NUMBER=group_number,
-                    GROUP_INVITE_LINK=result["invite_url"],
-                    GROUP_NAME=group_name,
-                    P2P_IMAGE=P2P_IMAGE
-                )
-                await event.edit(
-                    message,
-                    parse_mode='html',
-                    link_preview=True,
-                    buttons=get_p2p_created_buttons(result["invite_url"])
-                )
-            else:
-                await event.edit(
-                    "𝘌𝘴𝘤𝘳𝘰𝘸 𝘊𝘳𝘦𝘢𝘵𝘪𝘰𝘯 𝘍𝘢𝘪𝘭𝘦𝘥\n\nPlease try again later",
-                    buttons=[Button.inline("🔄 Try Again", b"create")]
-                )
-        except Exception as fallback_error:
-            print(f"[ERROR] P2P fallback: {fallback_error}")
-            await event.edit(
-                "𝘌𝘳𝘳𝘰𝘳 𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘌𝘴𝘤𝘳𝘰𝘸\n\nTechnical issue detected",
-                buttons=[Button.inline("🔄 Try Again", b"create")]
-            )
-            
-    except Exception as e:
-        print(f"[ERROR] P2P handler: {e}")
-        import traceback
-        traceback.print_exc()
-        # Fallback to regular message without custom emojis
-        try:
-            from utils.texts import P2P_CREATED_MESSAGE
-            from utils.buttons import get_p2p_created_buttons
-            
-            # Create group again if needed
-            if 'result' not in locals() or not result:
-                result = await create_escrow_group(group_name, bot_username, "p2p", event.client, user.id)
-            
-            if result and "invite_url" in result:
-                message = P2P_CREATED_MESSAGE.format(
-                    GROUP_NUMBER=group_number,
-                    GROUP_INVITE_LINK=result["invite_url"],
-                    GROUP_NAME=group_name,
-                    P2P_IMAGE=P2P_IMAGE
-                )
-                await event.edit(
-                    message,
-                    parse_mode='html',
-                    link_preview=True,
-                    buttons=get_p2p_created_buttons(result["invite_url"])
-                )
-            else:
-                await event.edit(
-                    "𝘌𝘴𝘤𝘳𝘰𝘸 𝘊𝘳𝘦𝘢𝘵𝘪𝘰𝘯 𝘍𝘢𝘪𝘭𝘦𝘥\n\nPlease try again later",
-                    buttons=[Button.inline("🔄 Try Again", b"create")]
-                )
-        except Exception as fallback_error:
-            print(f"[ERROR] P2P fallback: {fallback_error}")
-            await event.edit(
-                "𝘌𝘳𝘳𝘰𝘳 𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘌𝘴𝘤𝘳𝘰𝘸\n\nTechnical issue detected",
-                buttons=[Button.inline("🔄 Try Again", b"create")]
-            )
-            
-    except Exception as e:
-        print(f"[ERROR] P2P handler: {e}")
-        import traceback
-        traceback.print_exc()
-        # Fallback to regular message without custom emojis
-        try:
-            from utils.texts import P2P_CREATED_MESSAGE
-            from utils.buttons import get_p2p_created_buttons
-            
-            # Create group again if needed
-            if 'result' not in locals() or not result:
-                result = await create_escrow_group(group_name, bot_username, "p2p", event.client, user.id)
-            
-            if result and "invite_url" in result:
-                message = P2P_CREATED_MESSAGE.format(
-                    GROUP_NUMBER=group_number,
-                    GROUP_INVITE_LINK=result["invite_url"],
-                    GROUP_NAME=group_name,
-                    P2P_IMAGE=P2P_IMAGE
-                )
-                await event.edit(
-                    message,
-                    parse_mode='html',
-                    link_preview=True,
-                    buttons=get_p2p_created_buttons(result["invite_url"])
-                )
-            else:
-                await event.edit(
-                    "𝘌𝘴𝘤𝘳𝘰𝘸 𝘊𝘳𝘦𝘢𝘵𝘪𝘰𝘯 𝘍𝘢𝘪𝘭𝘦𝘥\n\nPlease try again later",
-                    buttons=[Button.inline("🔄 Try Again", b"create")]
-                )
-        except Exception as fallback_error:
-            print(f"[ERROR] P2P fallback: {fallback_error}")
-            await event.edit(
-                "𝘌𝘳𝘳𝘰𝘳 𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘌𝘴𝘤𝘳𝘰𝘸\n\nTechnical issue detected",
-                buttons=[Button.inline("🔄 Try Again", b"create")]
-            )
+
 async def handle_create_other(event):
     """
     Handle OTC deal selection with premium custom emojis - Proper Telethon way
@@ -425,20 +401,20 @@ async def handle_create_other(event):
         group_number = get_next_number("other")
         group_name = f"𝖮𝖳𝖢 𝘌𝘴𝘤𝘳𝘰𝘸 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 • #{group_number:02d}"
         
-        # Show animation messages (simplified without HTML since we're not using parse_mode yet)
+        # Show animation messages with bold formatting
         animation_messages = [
-            f"𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘖𝘛𝘊 𝘌𝘴𝘤𝘳𝘰𝘸\n\nPlease wait {mention}.",
-            f"𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘖𝘛𝘊 𝘌𝘴𝘤𝘳𝘰𝘸\n\nPlease wait {mention}..",
-            f"𝘊𝘳𝘦𝘢𝘵𝘪𝘯𝘨 𝘖𝘛𝘊 𝘌𝘴𝘤𝘳𝘰𝘸\n\nPlease wait {mention}...",
+            f"<b>Creating OTC Escrow</b>\nPlease wait {mention}.",
+            f"<b>Creating OTC Escrow</b>\nPlease wait {mention}..",
+            f"<b>Creating OTC Escrow</b>\nPlease wait {mention}...",
         ]
         
-        # Display animation
+        # Display animation with HTML parsing
         for msg in animation_messages:
-            await event.edit(msg)
+            await event.edit(msg, parse_mode='html')
             await asyncio.sleep(0.5)
         
         # Create group
-        result = await create_escrow_group(group_name, bot_username, "other", event.client, user.id)
+        result = await create_escrow_group(group_name, bot_username, "other", event.client, user.id, mention)
         
         if result and "invite_url" in result:
             from utils.buttons import get_otc_created_buttons
@@ -532,7 +508,7 @@ Proceed to the group to define participants and contract terms 🤝
             
             # Create group again if needed
             if 'result' not in locals() or not result:
-                result = await create_escrow_group(group_name, bot_username, "other", event.client, user.id)
+                result = await create_escrow_group(group_name, bot_username, "other", event.client, user.id, mention)
             
             if result and "invite_url" in result:
                 message = OTHER_CREATED_MESSAGE.format(
@@ -559,7 +535,7 @@ Proceed to the group to define participants and contract terms 🤝
                 buttons=[Button.inline("🔄 Try Again", b"create")]
             )
 
-async def create_escrow_group(group_name, bot_username, group_type, bot_client, creator_user_id):
+async def create_escrow_group(group_name, bot_username, group_type, bot_client, creator_user_id, mention):
     """
     Create a supergroup
     """
@@ -678,9 +654,9 @@ async def create_escrow_group(group_name, bot_username, group_type, bot_client, 
         # Store group data
         store_group_data(chat_id, group_name, group_type, creator.id, bot_username, creator_name, creator_user_id)
         
-        # Send log to channel (optional - skip if fails)
+        # Send log to channel with premium emojis
         try:
-            await send_log_to_channel(user_client, group_name, group_type, creator, chat_id, invite_url, creator_user_id)
+            await send_log_to_channel(user_client, group_name, group_type, creator, chat_id, invite_url, creator_user_id, mention)
         except Exception as log_error:
             print(f"[WARNING] Log failed: {log_error}")
             # Continue even if log fails
@@ -707,49 +683,38 @@ async def create_escrow_group(group_name, bot_username, group_type, bot_client, 
             await user_client.disconnect()
             print("[INFO] User client disconnected")
 
-async def send_log_to_channel(user_client, group_name, group_type, creator, chat_id, invite_url, creator_user_id):
-    """Send creation log to channel"""
+async def send_log_to_channel(user_client, group_name, group_type, creator, chat_id, invite_url, creator_user_id, mention):
+    """Send creation log to channel with exact format"""
     try:
-        from utils.texts import CHANNEL_LOG_CREATION
+        # Format the log message exactly as requested
+        group_type_display = "#𝗉2𝗉" if group_type == "p2p" else "#𝗈𝗍𝖼"
+        clean_chat_id = str(chat_id)
+        if clean_chat_id.startswith('-100'):
+            clean_chat_id = clean_chat_id[4:]
         
-        # Generate log ID
-        import random
-        log_id = f"{int(time.time())}{random.randint(1000, 9999)}"
+        log_text = f"""#𝖭𝖾𝗐 𝖤𝗌𝖼𝗋𝗈𝗐 𝖦𝗋𝗈𝗎𝗉 𝖢𝗋𝖾𝖺𝗍𝖾𝖽 & 𝖲𝖺𝗏𝖾𝖽.
+
+𝖣𝖾𝖺𝗅 𝖳𝗒𝗉𝖾 : {group_type_display} 💸
+𝖭𝖺𝗆𝖾 : {group_name} 🔗
+𝖢𝗁𝖺𝗍 𝖨𝖣 : {clean_chat_id} 🥂
+Link : {invite_url}
+
+𝖢𝗋𝖾𝖺𝗍𝖾𝖽 𝖡𝗒 : {mention} 🟢
+𝖴𝗌𝖾𝗋 𝖨𝖣 : {creator_user_id} ➖"""
+
+        # Build entities for log message
+        entities = build_log_entities(log_text, group_type)
         
-        # Format timestamp
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')
-        
-        # Get creator display
-        creator_display = creator.first_name or f"User_{creator.id}"
-        if creator.last_name:
-            creator_display = f"{creator_display} {creator.last_name}"
-        
-        # Format escrow type
-        escrow_type = "P2P Escrow" if "p2p" in group_type.lower() else "OTC Escrow"
-        
-        # Create log message
-        log_message = CHANNEL_LOG_CREATION.format(
-            log_id=log_id,
-            group_name=group_name,
-            escrow_type=escrow_type,
-            timestamp=timestamp,
-            creator_id=creator_user_id,
-            creator_name=creator_display,
-            creator_username=creator.username if creator.username else "N/A",
-            chat_id=chat_id,
-            group_invite_link=invite_url
-        )
-        
-        # Send to log channel
+        # Send to log channel with entities
         try:
             # Try with get_entity
             entity = await user_client.get_entity(LOG_CHANNEL_ID)
             await user_client.send_message(
                 entity,
-                log_message,
-                parse_mode='html'
+                log_text,
+                formatting_entities=entities
             )
-            print(f"[LOG] Sent to channel")
+            print(f"[LOG] Sent to channel with premium emojis")
             
         except Exception as e:
             print(f"[WARNING] Channel log method 1 failed: {e}")
@@ -757,11 +722,6 @@ async def send_log_to_channel(user_client, group_name, group_type, creator, chat
             # Try with input peer
             try:
                 from telethon.tl.types import InputPeerChannel
-                # Remove -100 prefix if present
-                channel_id = abs(LOG_CHANNEL_ID)
-                if str(LOG_CHANNEL_ID).startswith('-100'):
-                    channel_id = int(str(LOG_CHANNEL_ID)[4:])
-                
                 # Try to get channel entity
                 try:
                     channel_entity = await user_client.get_entity(LOG_CHANNEL_ID)
@@ -771,8 +731,8 @@ async def send_log_to_channel(user_client, group_name, group_type, creator, chat
                     )
                     await user_client.send_message(
                         input_channel,
-                        log_message,
-                        parse_mode='html'
+                        log_text,
+                        formatting_entities=entities
                     )
                     print(f"[LOG] Sent via InputPeerChannel")
                 except:
